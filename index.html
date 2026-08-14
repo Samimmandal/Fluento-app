@@ -45,285 +45,7 @@
       const [authLoading, setAuthLoading] = useState(false);
 
       const [level, setLevel] = useState(null);
-      const [mode, setMode] = useState(null); // "voice" or "text"
-      const [messages, setMessages] = useState([]);
-      const [inputText, setInputText] = useState("");
-      const [isTyping, setIsTyping] = useState(false);
-      const [isListening, setIsListening] = useState(false);
-      const [isSpeaking, setIsSpeaking] = useState(false);
-      const [showLevelModal, setShowLevelModal] = useState(false);
-      const [showModeModal, setShowModeModal] = useState(false);
-      const messagesEndRef = useRef(null);
-      const recognitionRef = useRef(null);
-
-      useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          setSession(session);
-          setLoading(false);
-          if (session) setShowLevelModal(true);
-        });
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-          setSession(session);
-          if (session) setShowLevelModal(true);
-        });
-
-        return () => subscription.unsubscribe();
-      }, []);
-
-      useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, [messages, isTyping]);
-
-      // Speech Recognition
-      useEffect(() => {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognition) {
-          const recognition = new SpeechRecognition();
-          recognition.continuous = false;
-          recognition.interimResults = false;
-          recognition.lang = "en-US";
-
-          recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            setInputText(transcript);
-            setIsListening(false);
-          };
-          recognition.onerror = () => setIsListening(false);
-          recognition.onend = () => setIsListening(false);
-
-          recognitionRef.current = recognition;
-        }
-      }, []);
-
-      const startListening = () => {
-        if (recognitionRef.current && !isListening) {
-          setIsListening(true);
-          recognitionRef.current.start();
-        }
-      };
-
-      const stopListening = () => {
-        if (recognitionRef.current && isListening) {
-          recognitionRef.current.stop();
-          setIsListening(false);
-        }
-      };
-
-      // Text-to-Speech (AI voice reply)
-      const speakText = (text) => {
-        if (!window.speechSynthesis) return;
-        
-        // Stop any previous speech
-        window.speechSynthesis.cancel();
-        
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-US";
-        utterance.rate = 0.95;
-        utterance.pitch = 1;
-
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-
-        window.speechSynthesis.speak(utterance);
-      };
-
-      // Auth
-      const handleGoogleLogin = async () => {
-        setAuthError("");
-        setAuthLoading(true);
-        try {
-          const { error } = await supabase.auth.signInWithOAuth({
-            provider: "google",
-            options: {
-              redirectTo: "https://samimmandal.github.io/Fluento-app/"
-            }
-          });
-          if (error) throw error;
-        } catch (err) {
-          setAuthError(err.message);
-          setAuthLoading(false);
-        }
-      };
-
-      const handleLogout = async () => {
-        window.speechSynthesis?.cancel();
-        await supabase.auth.signOut();
-        setSession(null);
-        setMessages([]);
-        setLevel(null);
-        setMode(null);
-        setShowLevelModal(false);
-        setShowModeModal(false);
-      };
-
-      // Level & Mode
-      const handleSelectLevel = (chosenLevel) => {
-        setLevel(chosenLevel);
-        setShowLevelModal(false);
-        setShowModeModal(true);
-      };
-
-      const handleSelectMode = (chosenMode) => {
-        setMode(chosenMode);
-        setShowModeModal(false);
-        setMessages([{
-          sender: "partner",
-          text: `Hey there! I'm your English speaking practice partner. You're in ${chosenMode === "voice" ? "Voice" : "Text"} mode at ${level} level. What's on your mind today?`,
-          correction: null
-        }]);
-      };
-
-      // Chat
-      const parseCorrection = (rawText) => {
-        if (!rawText.includes("CORRECTION:")) return { text: rawText, correction: null };
-        const parts = rawText.split("CORRECTION:");
-        const mainText = parts[0].trim();
-        const correctionPart = parts[1].trim();
-        const match = correctionPart.match(/(.+?)\s*→\s*(.+?)(?:\s*\((.+)\))?$/);
-        if (match) {
-          return {
-            text: mainText,
-            correction: {
-              original: match[1].trim(),
-              corrected: match[2].trim(),
-              tip: match[3] ? match[3].trim() : ""
-            }
-          };
-        }
-        return { text: rawText, correction: null };
-      };
-
-      const handleSendMessage = async (e) => {
-        if (e) e.preventDefault();
-        const trimmed = inputText.trim();
-        if (!trimmed || isTyping || !level || !session) return;
-
-        const userMsg = trimmed;
-        setInputText("");
-        setMessages(prev => [...prev, { sender: "user", text: userMsg, correction: null }]);
-        setIsTyping(true);
-
-        try {
-          const response = await fetch(WORKER_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: session.user.id,
-              message: userMsg,
-              level: level
-            })
-          });
-
-          const data = await response.json();
-          if (data.reply) {
-            const parsed = parseCorrection(data.reply);
-            setMessages(prev => [...prev, {
-              sender: "partner",
-              text: parsed.text,
-              correction: parsed.correction
-            }]);
-
-            // Speak the reply only in Voice Mode
-            if (mode === "voice") {
-              speakText(parsed.text);
-            }
-          } else {
-            setMessages(prev => [...prev, {
-              sender: "partner",
-              text: "Sorry, I had trouble understanding. Can you try again?",
-              correction: null
-            }]);
-          }
-        } catch (err) {
-          setMessages(prev => [...prev, {
-            sender: "partner",
-            text: "Connection problem. Please try again.",
-            correction: null
-          }]);
-        }
-        setIsTyping(false);
-      };
-
-      if (loading) {
-        return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
-      }
-
-      // LOGIN
-      if (!session) {
-        return (
-          <div className="min-h-screen bg-black flex items-center justify-center p-4">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 w-full max-w-md text-center">
-              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white">
-                <MicIcon />
-              </div>
-              <h1 className="text-2xl font-semibold text-white mb-1">Fluento</h1>
-              <p className="text-neutral-400 text-sm mb-8">English Speaking Partner</p>
-              {authError && (
-                <div className="text-red-400 text-sm bg-red-950/30 border border-red-900 rounded-xl p-3 mb**Yes, I understand clearly.**
-
-You want:
-
-1. **Microphone like WhatsApp** (press & hold to speak, release to send)
-2. In **Voice Mode** → AI replies with **voice** (not only text)
-3. Microphone should **only appear in Voice Mode** (hidden in Text Mode)
-
-I will update the code with all three things.
-
----
-
-### Replace your entire `index.html` with this new version:
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fluento - English Speaking Partner</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body class="bg-black">
-  <div id="root"></div>
-
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
-
-    const SUPABASE_URL = "https://beqmmczwetvbxieentrz.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_KZ2ONlqKUuDe6bYxNggowQ_kc-3kBDL";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const WORKER_URL = "https://morning-bonus-5828.imsamimmandal601.workers.dev";
-
-    const MicIcon = ({ size = 28, className = "" }) => (
-      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-        <line x1="12" x2="12" y1="19" y2="22"/>
-      </svg>
-    );
-
-    const GoogleIcon = () => (
-      <svg width="20" height="20" viewBox="0 0 24 24">
-        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-      </svg>
-    );
-
-    function App() {
-      const [session, setSession] = useState(null);
-      const [loading, setLoading] = useState(true);
-      const [authError, setAuthError] = useState("");
-      const [authLoading, setAuthLoading] = useState(false);
-
-      const [level, setLevel] = useState(null);
-      const [mode, setMode] = useState(null); // "voice" or "text"
+      const [mode, setMode] = useState(null);
       const [messages, setMessages] = useState([]);
       const [inputText, setInputText] = useState("");
       const [isTyping, setIsTyping] = useState(false);
@@ -352,7 +74,6 @@ I will update the code with all three things.
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, [messages, isTyping]);
 
-      // Speech Recognition setup
       useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
@@ -365,10 +86,9 @@ I will update the code with all three things.
             const transcript = event.results[0][0].transcript;
             setInputText(transcript);
             setIsListening(false);
-            // Auto send after speaking
             setTimeout(() => {
               sendMessage(transcript);
-            }, 300);
+            }, 400);
           };
 
           recognition.onerror = () => setIsListening(false);
@@ -376,16 +96,14 @@ I will update the code with all three things.
 
           recognitionRef.current = recognition;
         }
-      }, [level, mode, session]);
+      }, []);
 
-      // Text-to-Speech for AI replies in Voice Mode
       const speakText = (text) => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = "en-US";
         utterance.rate = 0.95;
-        utterance.pitch = 1;
         window.speechSynthesis.speak(utterance);
       };
 
@@ -404,7 +122,6 @@ I will update the code with all three things.
         }
       };
 
-      // ========== AUTH ==========
       const handleGoogleLogin = async () => {
         setAuthError("");
         setAuthLoading(true);
@@ -432,7 +149,6 @@ I will update the code with all three things.
         setShowModeModal(false);
       };
 
-      // ========== LEVEL & MODE ==========
       const handleSelectLevel = (chosenLevel) => {
         setLevel(chosenLevel);
         setShowLevelModal(false);
@@ -449,13 +165,12 @@ I will update the code with all three things.
         }]);
       };
 
-      // ========== CHAT ==========
       const parseCorrection = (rawText) => {
         if (!rawText.includes("CORRECTION:")) return { text: rawText, correction: null };
         const parts = rawText.split("CORRECTION:");
         const mainText = parts[0].trim();
         const correctionPart = parts[1].trim();
-        const match = correctionPart.match(/(.+?)\s*→\s*(.+?)(?:\s*\((.+)\))?$/);
+        const match = correctionPart.match(/(.+?)\s*→\s*(.+?)(?:\s*$$   (.+)   $$)?$/);
         if (match) {
           return {
             text: mainText,
@@ -470,7 +185,7 @@ I will update the code with all three things.
       };
 
       const sendMessage = async (text) => {
-        const trimmed = text.trim();
+        const trimmed = (text || "").trim();
         if (!trimmed || isTyping || !level || !session) return;
 
         setInputText("");
@@ -497,7 +212,6 @@ I will update the code with all three things.
               correction: parsed.correction
             }]);
 
-            // Speak the reply only in Voice Mode
             if (mode === "voice") {
               speakText(parsed.text);
             }
@@ -527,7 +241,6 @@ I will update the code with all three things.
         return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
       }
 
-      // ========== LOGIN ==========
       if (!session) {
         return (
           <div className="min-h-screen bg-black flex items-center justify-center p-4">
@@ -555,7 +268,6 @@ I will update the code with all three things.
         );
       }
 
-      // ========== LEVEL ==========
       if (showLevelModal) {
         return (
           <div className="min-h-screen bg-black flex items-center justify-center p-4">
@@ -586,7 +298,6 @@ I will update the code with all three things.
         );
       }
 
-      // ========== MODE ==========
       if (showModeModal) {
         return (
           <div className="min-h-screen bg-black flex items-center justify-center p-4">
@@ -629,10 +340,8 @@ I will update the code with all three things.
         );
       }
 
-      // ========== MAIN CHAT ==========
       return (
         <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
-          {/* Sidebar */}
           <div className="w-64 border-r border-neutral-800 hidden md:flex flex-col justify-between p-6">
             <div>
               <div className="flex items-center gap-3 mb-8">
@@ -662,7 +371,6 @@ I will update the code with all three things.
             </div>
           </div>
 
-          {/* Chat Area */}
           <div className="flex-1 flex flex-col relative">
             <div className="h-16 border-b border-neutral-800 flex items-center justify-between px-6">
               <div className="flex items-center gap-3">
@@ -714,11 +422,9 @@ I will update the code with all three things.
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Area */}
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-black border-t border-neutral-800">
               <div className="max-w-3xl mx-auto">
                 {mode === "voice" ? (
-                  // WhatsApp-style Hold to Speak
                   <div className="flex flex-col items-center">
                     <button
                       onMouseDown={startListening}
@@ -739,7 +445,6 @@ I will update the code with all three things.
                     </p>
                   </div>
                 ) : (
-                  // Text Mode Input
                   <form onSubmit={handleSendMessage} className="flex gap-3 items-center">
                     <input
                       value={inputText}
