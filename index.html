@@ -50,6 +50,7 @@
       const [inputText, setInputText] = useState("");
       const [isTyping, setIsTyping] = useState(false);
       const [isListening, setIsListening] = useState(false);
+      const [micStatus, setMicStatus] = useState("");
       const [showLevelModal, setShowLevelModal] = useState(false);
       const [showModeModal, setShowModeModal] = useState(false);
       const messagesEndRef = useRef(null);
@@ -74,28 +75,55 @@
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, [messages, isTyping]);
 
+      // Better Speech Recognition setup
       useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognition) {
-          const recognition = new SpeechRecognition();
-          recognition.continuous = false;
-          recognition.interimResults = false;
-          recognition.lang = "en-US";
-
-          recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            setInputText(transcript);
-            setIsListening(false);
-            setTimeout(() => {
-              sendMessage(transcript);
-            }, 400);
-          };
-
-          recognition.onerror = () => setIsListening(false);
-          recognition.onend = () => setIsListening(false);
-
-          recognitionRef.current = recognition;
+        if (!SpeechRecognition) {
+          setMicStatus("Speech recognition not supported in this browser. Use Chrome.");
+          return;
         }
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = "en-US";
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+          setIsListening(true);
+          setMicStatus("Listening... Speak now");
+        };
+
+        recognition.onresult = (event) => {
+          let transcript = "";
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+          }
+          setInputText(transcript);
+
+          if (event.results[event.results.length - 1].isFinal) {
+            setMicStatus("Got it: " + transcript);
+            setIsListening(false);
+          }
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Speech error:", event.error);
+          setIsListening(false);
+          if (event.error === "not-allowed") {
+            setMicStatus("Microphone permission denied. Please allow microphone.");
+          } else if (event.error === "no-speech") {
+            setMicStatus("No speech detected. Try again.");
+          } else {
+            setMicStatus("Error: " + event.error);
+          }
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
       }, []);
 
       const speakText = (text) => {
@@ -108,16 +136,25 @@
       };
 
       const startListening = () => {
-        if (recognitionRef.current && !isListening) {
-          setIsListening(true);
+        if (!recognitionRef.current) {
+          setMicStatus("Speech recognition not available");
+          return;
+        }
+        try {
           setInputText("");
+          setMicStatus("Starting...");
           recognitionRef.current.start();
+        } catch (err) {
+          console.error(err);
+          setMicStatus("Could not start microphone");
         }
       };
 
       const stopListening = () => {
         if (recognitionRef.current && isListening) {
-          recognitionRef.current.stop();
+          try {
+            recognitionRef.current.stop();
+          } catch (e) {}
           setIsListening(false);
         }
       };
@@ -170,7 +207,7 @@
         const parts = rawText.split("CORRECTION:");
         const mainText = parts[0].trim();
         const correctionPart = parts[1].trim();
-        const match = correctionPart.match(/(.+?)\s*→\s*(.+?)(?:\s*$$   (.+)   $$)?$/);
+        const match = correctionPart.match(/(.+?)\s*→\s*(.+?)(?:\s*\((.+)\))?$/);
         if (match) {
           return {
             text: mainText,
@@ -185,10 +222,11 @@
       };
 
       const sendMessage = async (text) => {
-        const trimmed = (text || "").trim();
+        const trimmed = (text || inputText || "").trim();
         if (!trimmed || isTyping || !level || !session) return;
 
         setInputText("");
+        setMicStatus("");
         setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
         setIsTyping(true);
 
@@ -382,7 +420,7 @@
               </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto pt-6 pb-36 px-4 md:px-8 space-y-6 max-w-3xl mx-auto w-full">
+            <div className="flex-1 overflow-y-auto pt-6 pb-40 px-4 md:px-8 space-y-6 max-w-3xl mx-auto w-full">
               {messages.map((msg, idx) => (
                 <div key={idx} className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}>
                   <div className={`max-w-xl rounded-2xl px-4 py-3 text-sm leading-relaxed ${
@@ -425,23 +463,41 @@
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-black border-t border-neutral-800">
               <div className="max-w-3xl mx-auto">
                 {mode === "voice" ? (
-                  <div className="flex flex-col items-center">
-                    <button
-                      onMouseDown={startListening}
-                      onMouseUp={stopListening}
-                      onMouseLeave={stopListening}
-                      onTouchStart={startListening}
-                      onTouchEnd={stopListening}
-                      className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
-                        isListening 
-                          ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50" 
-                          : "bg-neutral-800 hover:bg-neutral-700"
-                      }`}
-                    >
-                      <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
-                    </button>
-                    <p className="text-xs text-neutral-400 mt-3">
-                      {isListening ? "Listening... Release to send" : "Hold to speak"}
+                  <div className="flex flex-col items-center gap-3">
+                    {inputText && (
+                      <div className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2 text-sm text-neutral-300 text-center">
+                        {inputText}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-4">
+                      <button
+                        onMouseDown={startListening}
+                        onMouseUp={stopListening}
+                        onMouseLeave={stopListening}
+                        onTouchStart={startListening}
+                        onTouchEnd={stopListening}
+                        className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
+                          isListening 
+                            ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50" 
+                            : "bg-neutral-800 hover:bg-neutral-700"
+                        }`}
+                      >
+                        <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
+                      </button>
+
+                      {inputText && (
+                        <button
+                          onClick={() => sendMessage(inputText)}
+                          className="bg-rose-500 hover:bg-rose-600 text-white px-5 py-3 rounded-2xl font-medium"
+                        >
+                          Send
+                        </button>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-neutral-400 text-center">
+                      {micStatus || (isListening ? "Listening... Release to stop" : "Hold the mic button and speak")}
                     </p>
                   </div>
                 ) : (
