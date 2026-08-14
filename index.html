@@ -28,7 +28,7 @@
 
         const MicIcon = ({ size = 28, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                stroke="currentColor" strokeWidth="2" className={className}>
                 <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                 <line x1="12" x2="12" y1="19" y2="22" />
@@ -68,9 +68,25 @@
             const recognitionRef = useRef(null);
             const transcriptRef = useRef("");
             const interimRef = useRef("");
+            // Map of resultIndex -> finalized transcript chunk. Rebuilding the
+            // full transcript from this map (instead of appending deltas) avoids
+            // the "can can I can I talk" duplication bug.
+            const finalTranscriptsRef = useRef({});
             const isManualStopRef = useRef(false);
             const isRestartingRef = useRef(false);
-            const sendTimeoutRef = useRef(null);
+
+            // --- Refs that mirror state, so callbacks captured once by the
+            // SpeechRecognition event handlers (set up in a mount-only effect)
+            // never read stale/null values for session, level, mode, isTyping. ---
+            const sessionRef = useRef(session);
+            const levelRef = useRef(level);
+            const modeRef = useRef(mode);
+            const isTypingRef = useRef(isTyping);
+
+            useEffect(() => { sessionRef.current = session; }, [session]);
+            useEffect(() => { levelRef.current = level; }, [level]);
+            useEffect(() => { modeRef.current = mode; }, [mode]);
+            useEffect(() => { isTypingRef.current = isTyping; }, [isTyping]);
 
             useEffect(() => {
                 supabase.auth.getSession().then(({ data: { session } }) => {
@@ -91,7 +107,7 @@
                 messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
             }, [messages, isTyping]);
 
-            // Speech Recognition setup – continuous with manual control
+            // Speech Recognition setup – continuous mode with manual control
             useEffect(() => {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 if (!SpeechRecognition) {
@@ -107,30 +123,34 @@
 
                 recognition.onstart = () => {
                     setIsListening(true);
-                    setMicStatus("Listening… tap mic to stop");
+                    setMicStatus("Listening… tap mic to stop & send");
                     isManualStopRef.current = false;
                     isRestartingRef.current = false;
                 };
 
                 recognition.onresult = (event) => {
-                    let final = "";
                     let interim = "";
                     for (let i = event.resultIndex; i < event.results.length; i++) {
                         const result = event.results[i];
                         if (result.isFinal) {
-                            // Use the full transcript from the final result (it contains the whole utterance)
-                            final = result[0].transcript.trim();
+                            // Store by index so re-delivered/duplicate events
+                            // simply overwrite the same slot instead of piling up.
+                            finalTranscriptsRef.current[i] = result[0].transcript.trim();
                         } else {
                             interim += result[0].transcript;
                         }
                     }
-                    if (final) {
-                        // Replace the transcript with the latest final – avoids duplication
-                        transcriptRef.current = final;
-                    }
+
+                    const finalText = Object.keys(finalTranscriptsRef.current)
+                        .sort((a, b) => a - b)
+                        .map((k) => finalTranscriptsRef.current[k])
+                        .join(" ")
+                        .trim();
+
+                    transcriptRef.current = finalText;
                     interimRef.current = interim;
-                    const display = (transcriptRef.current || "") + (interim ? " " + interim : "");
-                    setInputText(display.trim());
+                    const display = (finalText + (interim ? " " + interim : "")).trim();
+                    setInputText(display);
                 };
 
                 recognition.onerror = (event) => {
@@ -151,20 +171,16 @@
                         const textToSend = transcriptRef.current.trim();
                         if (textToSend) {
                             setMicStatus("Sending…");
-                            // Clear any pending timeout
-                            if (sendTimeoutRef.current) clearTimeout(sendTimeoutRef.current);
-                            sendTimeoutRef.current = setTimeout(() => {
+                            setTimeout(() => {
                                 sendMessage(textToSend);
-                                sendTimeoutRef.current = null;
-                            }, 200);
+                            }, 150);
                         } else {
                             setMicStatus("No speech to send");
                         }
                         isManualStopRef.current = false;
                     } else {
-                        // Unexpected end – restart if not already restarting and if still should be listening?
-                        // Only restart if we are still in a listening state (user hasn't manually stopped)
-                        if (!isRestartingRef.current && isListening) {
+                        // Unexpected end – restart if not already restarting
+                        if (!isRestartingRef.current) {
                             isRestartingRef.current = true;
                             setMicStatus("Reconnecting…");
                             setTimeout(() => {
@@ -232,9 +248,10 @@
                         recognitionRef.current.stop();
                     } catch (e) { /* ignore */ }
                 } else {
-                    // Start listening – reset transcript
+                    // Start listening – reset transcript state
                     transcriptRef.current = "";
                     interimRef.current = "";
+                    finalTranscriptsRef.current = {};
                     setInputText("");
                     isManualStopRef.current = false;
                     isRestartingRef.current = false;
@@ -309,40 +326,39 @@
                 return { text: rawText, correction: null };
             };
 
+            // Reads session/level/mode/isTyping from refs (not state) so this
+            // function works correctly even when invoked from a stale closure
+            // captured by the mount-only SpeechRecognition event handlers.
             const sendMessage = async (text) => {
                 const trimmed = (text || "").trim();
-                if (!trimmed) {
-                    setMicStatus("Empty message");
-                    return;
-                }
-                if (isTyping) {
-                    setMicStatus("Please wait for previous reply");
-                    return;
-                }
-                if (!level || !session) {
-                    setMicStatus("Session not ready");
-                    return;
-                }
+                if (!trimmed || isTypingRef.current || !levelRef.current || !sessionRef.current) return;
 
                 // Clear mic state
                 setInputText("");
                 setMicStatus("");
                 transcriptRef.current = "";
                 interimRef.current = "";
+                finalTranscriptsRef.current = {};
 
                 setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
                 setIsTyping(true);
+                isTypingRef.current = true;
 
                 try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
                     const response = await fetch(WORKER_URL, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            userId: session.user.id,
+                            userId: sessionRef.current.user.id,
                             message: trimmed,
-                            level: level
-                        })
+                            level: levelRef.current
+                        }),
+                        signal: controller.signal
                     });
+                    clearTimeout(timeoutId);
 
                     const data = await response.json();
                     if (data.reply) {
@@ -353,7 +369,7 @@
                             correction: parsed.correction
                         }]);
 
-                        if (mode === "voice") {
+                        if (modeRef.current === "voice") {
                             speakText(parsed.text);
                         }
                     } else {
@@ -364,13 +380,17 @@
                         }]);
                     }
                 } catch (err) {
+                    console.error("sendMessage error:", err);
                     setMessages(prev => [...prev, {
                         sender: "partner",
-                        text: "Connection problem. Please try again.",
+                        text: err.name === "AbortError"
+                            ? "That took too long to respond. Please try again."
+                            : "Connection problem. Please try again.",
                         correction: null
                     }]);
                 }
                 setIsTyping(false);
+                isTypingRef.current = false;
             };
 
             const handleSendMessage = (e) => {
@@ -576,7 +596,7 @@
                             <div ref={messagesEndRef} />
                         </div>
 
-                        {/* Input area - WhatsApp style mic */}
+                        {/* Input area */}
                         <div className="absolute bottom-0 left-0 right-0 p-4 bg-black border-t border-neutral-800">
                             <div className="max-w-3xl mx-auto">
                                 {mode === "voice" ? (
@@ -590,24 +610,18 @@
                                         <div className="flex items-center justify-center">
                                             <button
                                                 onClick={toggleListening}
-                                                className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                                className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
                                                     isListening
                                                         ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50"
                                                         : "bg-neutral-800 hover:bg-neutral-700"
                                                 }`}
                                             >
-                                                {isListening && (
-                                                    <span className="absolute inset-0 rounded-full animate-ping bg-rose-500/40"></span>
-                                                )}
-                                                <MicIcon 
-                                                    size={32} 
-                                                    className={isListening ? "text-white" : "text-neutral-300"} 
-                                                />
+                                                <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
                                             </button>
                                         </div>
 
                                         <p className="text-xs text-neutral-400 text-center min-h-[20px]">
-                                            {micStatus || (isListening ? "Listening… tap mic to stop" : "Tap the mic button to speak")}
+                                            {micStatus || (isListening ? "Listening… tap mic to stop & send" : "Tap the mic button to speak")}
                                         </p>
                                     </div>
                                 ) : (
