@@ -63,6 +63,9 @@
             const [micStatus, setMicStatus] = useState("");
             const [showLevelModal, setShowLevelModal] = useState(false);
             const [showModeModal, setShowModeModal] = useState(false);
+            // True while the mic is stopped and showing an editable preview of
+            // what was heard, waiting for the user to Send / Re-record / Discard.
+            const [isReviewingVoice, setIsReviewingVoice] = useState(false);
 
             const messagesEndRef = useRef(null);
             const recognitionRef = useRef(null);
@@ -108,6 +111,14 @@
                 messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
             }, [messages, isTyping]);
 
+            // Strips punctuation the recognizer sometimes auto-inserts (periods,
+            // question marks, commas, quotes, etc.) while keeping apostrophes
+            // inside contractions like "I'm" / "don't" intact.
+            const stripPunctuation = (text) => text
+                .replace(/[.,!?;:"“”‘’()\[\]{}…]/g, "")
+                .replace(/\s+/g, " ")
+                .trim();
+
             // Speech Recognition setup.
             //
             // IMPORTANT: continuous=true is unreliable on many Android/mobile
@@ -136,6 +147,11 @@
                 recognition.lang = "en-US";
                 recognition.maxAlternatives = 1;
 
+                // Caps how many times we'll auto-restart in a row after a
+                // recoverable error, so a persistent problem (e.g. no mic
+                // hardware) can't spam infinite restart attempts.
+                let restartFailureCount = 0;
+
                 const updateDisplay = () => {
                     const display = (
                         committedTranscriptRef.current + " " +
@@ -149,6 +165,7 @@
                     setIsListening(true);
                     setMicStatus("Listening… tap mic to stop & send");
                     isRestartingRef.current = false;
+                    restartFailureCount = 0;
                 };
 
                 recognition.onresult = (event) => {
@@ -163,7 +180,7 @@
                         }
                     }
                     if (finalChunk) {
-                        sessionFinalRef.current = finalChunk.trim();
+                        sessionFinalRef.current = stripPunctuation(finalChunk);
                     }
                     interimRef.current = interim;
                     updateDisplay();
@@ -171,9 +188,12 @@
 
                 recognition.onerror = (event) => {
                     console.error("Speech error:", event.error);
-                    if (event.error === "not-allowed") {
+                    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
                         permissionDeniedRef.current = true;
                         setMicStatus("Microphone permission denied");
+                    } else if (event.error === "audio-capture") {
+                        permissionDeniedRef.current = true;
+                        setMicStatus("No microphone found");
                     } else if (event.error === "no-speech") {
                         // Expected often with short bursts; onend will restart.
                         setMicStatus("Listening… tap mic to stop & send");
@@ -187,9 +207,9 @@
 
                     // Fold whatever this burst finalized into the running total.
                     if (sessionFinalRef.current) {
-                        committedTranscriptRef.current = (
+                        committedTranscriptRef.current = stripPunctuation(
                             committedTranscriptRef.current + " " + sessionFinalRef.current
-                        ).replace(/\s+/g, " ").trim();
+                        );
                         sessionFinalRef.current = "";
                     }
                     interimRef.current = "";
@@ -198,12 +218,12 @@
                         isManualStopRef.current = false;
                         const textToSend = committedTranscriptRef.current.trim();
                         if (textToSend) {
-                            setMicStatus("Sending…");
-                            setTimeout(() => {
-                                sendMessage(textToSend);
-                            }, 150);
+                            // Don't auto-send — let the user review/edit first.
+                            setInputText(textToSend);
+                            setIsReviewingVoice(true);
+                            setMicStatus("");
                         } else {
-                            setMicStatus("No speech to send");
+                            setMicStatus("No speech detected. Tap mic to try again.");
                         }
                         return;
                     }
@@ -217,7 +237,22 @@
                             try {
                                 recognitionRef.current.start();
                             } catch (e) {
-                                setMicStatus("Could not restart microphone");
+                                // Recognizer can throw InvalidStateError if the
+                                // previous session hasn't fully torn down yet;
+                                // back off briefly and try a couple more times
+                                // before giving up so we don't spam forever.
+                                restartFailureCount += 1;
+                                if (restartFailureCount <= 3) {
+                                    setTimeout(() => {
+                                        try {
+                                            recognitionRef.current.start();
+                                        } catch (e2) {
+                                            setMicStatus("Could not restart microphone");
+                                        }
+                                    }, 300 * restartFailureCount);
+                                } else {
+                                    setMicStatus("Could not restart microphone");
+                                }
                             }
                             isRestartingRef.current = false;
                         }, 150);
@@ -226,6 +261,7 @@
 
                 recognitionRef.current = recognition;
             }, []);
+
 
             // Prefer Daniel voice
             const speakText = (text) => {
@@ -281,6 +317,7 @@
                     interimRef.current = "";
                     permissionDeniedRef.current = false;
                     setInputText("");
+                    setIsReviewingVoice(false);
                     isManualStopRef.current = false;
                     isRestartingRef.current = false;
                     setMicStatus("Listening…");
@@ -290,6 +327,30 @@
                         setMicStatus("Could not start microphone");
                     }
                 }
+            };
+
+            // Sends the (possibly hand-edited) reviewed transcript.
+            const handleSendVoiceReview = () => {
+                const text = inputText.trim();
+                setIsReviewingVoice(false);
+                if (text) sendMessage(text);
+            };
+
+            // Throws away the transcript without sending.
+            const handleDiscardVoiceReview = () => {
+                setIsReviewingVoice(false);
+                setInputText("");
+                setMicStatus("");
+                committedTranscriptRef.current = "";
+            };
+
+            // Discards the transcript and immediately starts listening again.
+            const handleRetryVoiceReview = () => {
+                setIsReviewingVoice(false);
+                setInputText("");
+                setMicStatus("");
+                committedTranscriptRef.current = "";
+                setTimeout(() => toggleListening(), 0);
             };
 
             const handleGoogleLogin = async () => {
@@ -310,6 +371,13 @@
             };
 
             const handleLogout = async () => {
+                if (recognitionRef.current) {
+                    isManualStopRef.current = false;
+                    permissionDeniedRef.current = true; // prevent auto-restart
+                    try { recognitionRef.current.stop(); } catch (e) { /* ignore */ }
+                }
+                setIsReviewingVoice(false);
+                setInputText("");
                 await supabase.auth.signOut();
                 setSession(null);
                 setMessages([]);
@@ -326,6 +394,13 @@
             };
 
             const handleSelectMode = (chosenMode) => {
+                if (recognitionRef.current && isListening) {
+                    isManualStopRef.current = false;
+                    permissionDeniedRef.current = true; // prevent auto-restart during teardown
+                    try { recognitionRef.current.stop(); } catch (e) { /* ignore */ }
+                }
+                setIsReviewingVoice(false);
+                setInputText("");
                 setMode(chosenMode);
                 setShowModeModal(false);
                 setMessages([{
@@ -628,30 +703,64 @@
                         <div className="absolute bottom-0 left-0 right-0 p-4 bg-black border-t border-neutral-800">
                             <div className="max-w-3xl mx-auto">
                                 {mode === "voice" ? (
-                                    <div className="flex flex-col items-center gap-3">
-                                        {inputText && (
-                                            <div className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2.5 text-sm text-neutral-200 text-center">
-                                                {inputText}
+                                    isReviewingVoice ? (
+                                        <div className="flex flex-col gap-3">
+                                            <textarea
+                                                value={inputText}
+                                                onChange={(e) => setInputText(e.target.value)}
+                                                rows={2}
+                                                autoFocus
+                                                placeholder="Edit what you said..."
+                                                className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-rose-500 resize-none"
+                                            />
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={handleDiscardVoiceReview}
+                                                    className="flex-1 py-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-sm font-medium text-neutral-300"
+                                                >
+                                                    Discard
+                                                </button>
+                                                <button
+                                                    onClick={handleRetryVoiceReview}
+                                                    className="flex-1 py-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-sm font-medium text-neutral-300 flex items-center justify-center gap-1.5"
+                                                >
+                                                    <MicIcon size={16} /> Re-record
+                                                </button>
+                                                <button
+                                                    onClick={handleSendVoiceReview}
+                                                    disabled={!inputText.trim()}
+                                                    className="flex-1 py-3 rounded-2xl bg-rose-500 hover:bg-rose-600 disabled:opacity-40 disabled:hover:bg-rose-500 text-white text-sm font-medium"
+                                                >
+                                                    Send
+                                                </button>
                                             </div>
-                                        )}
-
-                                        <div className="flex items-center justify-center">
-                                            <button
-                                                onClick={toggleListening}
-                                                className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                                    isListening
-                                                        ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50"
-                                                        : "bg-neutral-800 hover:bg-neutral-700"
-                                                }`}
-                                            >
-                                                <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
-                                            </button>
                                         </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-3">
+                                            {inputText && (
+                                                <div className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2.5 text-sm text-neutral-200 text-center">
+                                                    {inputText}
+                                                </div>
+                                            )}
 
-                                        <p className="text-xs text-neutral-400 text-center min-h-[20px]">
-                                            {micStatus || (isListening ? "Listening… tap mic to stop & send" : "Tap the mic button to speak")}
-                                        </p>
-                                    </div>
+                                            <div className="flex items-center justify-center">
+                                                <button
+                                                    onClick={toggleListening}
+                                                    className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                                        isListening
+                                                            ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50"
+                                                            : "bg-neutral-800 hover:bg-neutral-700"
+                                                    }`}
+                                                >
+                                                    <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
+                                                </button>
+                                            </div>
+
+                                            <p className="text-xs text-neutral-400 text-center min-h-[20px]">
+                                                {micStatus || (isListening ? "Listening… tap mic to stop & send" : "Tap the mic button to speak")}
+                                            </p>
+                                        </div>
+                                    )
                                 ) : (
                                     <form onSubmit={handleSendMessage} className="flex gap-3 items-center">
                                         <input
