@@ -68,7 +68,9 @@
             const recognitionRef = useRef(null);
             const transcriptRef = useRef("");
             const interimRef = useRef("");
+            const lastFinalRef = useRef("");
             const isManualStopRef = useRef(false);
+            const isRestartingRef = useRef(false);
 
             useEffect(() => {
                 supabase.auth.getSession().then(({ data: { session } }) => {
@@ -106,10 +108,8 @@
                 recognition.onstart = () => {
                     setIsListening(true);
                     setMicStatus("Listening… tap mic to stop & send");
-                    transcriptRef.current = "";
-                    interimRef.current = "";
                     isManualStopRef.current = false;
-                    setInputText("");
+                    isRestartingRef.current = false;
                 };
 
                 recognition.onresult = (event) => {
@@ -124,7 +124,14 @@
                         }
                     }
                     if (final) {
-                        transcriptRef.current = final;
+                        // Append only if it's new (not a duplicate)
+                        if (final !== lastFinalRef.current) {
+                            // Avoid appending if it's already at the end
+                            if (!transcriptRef.current.endsWith(final)) {
+                                transcriptRef.current = (transcriptRef.current + " " + final).trim();
+                            }
+                            lastFinalRef.current = final;
+                        }
                     }
                     interimRef.current = interim;
                     const display = (transcriptRef.current || "") + (interim ? " " + interim : "");
@@ -157,7 +164,21 @@
                         }
                         isManualStopRef.current = false;
                     } else {
-                        setMicStatus("Listening stopped");
+                        // Unexpected end – restart if not already restarting
+                        if (!isRestartingRef.current) {
+                            isRestartingRef.current = true;
+                            setMicStatus("Reconnecting…");
+                            setTimeout(() => {
+                                try {
+                                    recognitionRef.current.start();
+                                } catch (e) {
+                                    setMicStatus("Could not restart microphone");
+                                }
+                                isRestartingRef.current = false;
+                            }, 400);
+                        } else {
+                            setMicStatus("Listening stopped");
+                        }
                     }
                 };
 
@@ -212,11 +233,13 @@
                         recognitionRef.current.stop();
                     } catch (e) { /* ignore */ }
                 } else {
-                    // Start listening
+                    // Start listening – reset transcript and lastFinal
                     transcriptRef.current = "";
                     interimRef.current = "";
+                    lastFinalRef.current = "";
                     setInputText("");
                     isManualStopRef.current = false;
+                    isRestartingRef.current = false;
                     setMicStatus("Listening…");
                     try {
                         recognitionRef.current.start();
@@ -297,6 +320,7 @@
                 setMicStatus("");
                 transcriptRef.current = "";
                 interimRef.current = "";
+                lastFinalRef.current = "";
 
                 setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
                 setIsTyping(true);
