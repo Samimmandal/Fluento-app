@@ -53,9 +53,11 @@
       const [micStatus, setMicStatus] = useState("");
       const [showLevelModal, setShowLevelModal] = useState(false);
       const [showModeModal, setShowModeModal] = useState(false);
+
       const messagesEndRef = useRef(null);
       const recognitionRef = useRef(null);
-      const finalTranscriptRef = useRef("");
+      const isHoldingRef = useRef(false);
+      const finalTextRef = useRef("");
 
       useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -76,7 +78,7 @@
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, [messages, isTyping]);
 
-      // Improved Speech Recognition - True Hold to Talk
+      // Speech Recognition - Fixed repeating issue
       useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -85,46 +87,46 @@
         }
 
         const recognition = new SpeechRecognition();
-        recognition.continuous = true;          // Keep listening while held
+        recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = "en-IN";             // Prefer Indian English
-        recognition.maxAlternatives = 1;
+        recognition.lang = "en-US";
 
         recognition.onstart = () => {
           setIsListening(true);
           setMicStatus("Listening... Keep holding");
-          finalTranscriptRef.current = "";
         };
 
         recognition.onresult = (event) => {
           let interim = "";
-          let final = finalTranscriptRef.current;
+          let final = "";
 
-          for (let i = event.resultIndex; i < event.results.length; i++) {
+          for (let i = 0; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript;
             if (event.results[i].isFinal) {
               final += transcript + " ";
-              finalTranscriptRef.current = final;
             } else {
               interim += transcript;
             }
           }
+
+          finalTextRef.current = final.trim();
           setInputText((final + interim).trim());
         };
 
         recognition.onerror = (event) => {
-          console.error("Speech error:", event.error);
           if (event.error === "not-allowed") {
             setMicStatus("Microphone permission denied. Please allow it.");
           } else if (event.error !== "aborted") {
             setMicStatus("Error: " + event.error);
           }
           setIsListening(false);
+          isHoldingRef.current = false;
         };
 
         recognition.onend = () => {
-          // If still supposed to be listening, restart (helps with continuous)
-          if (isListening) {
+          setIsListening(false);
+          // Only restart if user is still holding
+          if (isHoldingRef.current) {
             try {
               recognition.start();
             } catch (e) {}
@@ -134,37 +136,33 @@
         recognitionRef.current = recognition;
       }, []);
 
-      // Prefer Indian / Male voice
+      // Force "Daniel - Steady Broadcaster" voice
       const speakText = (text) => {
         if (!window.speechSynthesis) return;
+
         window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-IN";
-        utterance.rate = 0.92;
-        utterance.pitch = 0.95;
+        utterance.rate = 0.95;
+        utterance.pitch = 1;
 
         const voices = window.speechSynthesis.getVoices();
-        // Try to find Indian English or male voice
+
+        // Look for exact or close match to "Daniel - Steady Broadcaster"
         let selectedVoice = voices.find(v => 
-          v.lang === "en-IN" || v.lang.startsWith("en-IN")
+          v.name.toLowerCase().includes("daniel") && 
+          (v.name.toLowerCase().includes("steady") || v.name.toLowerCase().includes("broadcaster"))
         );
 
         if (!selectedVoice) {
-          selectedVoice = voices.find(v => 
-            v.name.toLowerCase().includes("male") || 
-            v.name.toLowerCase().includes("ravi") ||
-            v.name.toLowerCase().includes("indian")
-          );
-        }
-
-        if (!selectedVoice) {
-          // fallback to any English male-sounding voice
-          selectedVoice = voices.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("male"));
+          selectedVoice = voices.find(v => v.name.toLowerCase().includes("daniel"));
         }
 
         if (selectedVoice) {
           utterance.voice = selectedVoice;
+          console.log("Using voice:", selectedVoice.name);
+        } else {
+          console.log("Daniel voice not found. Available voices:", voices.map(v => v.name));
         }
 
         window.speechSynthesis.speak(utterance);
@@ -181,36 +179,38 @@
       }, []);
 
       const startListening = () => {
-        if (!recognitionRef.current) {
-          setMicStatus("Speech recognition not available");
-          return;
-        }
+        if (!recognitionRef.current) return;
+
+        isHoldingRef.current = true;
+        finalTextRef.current = "";
+        setInputText("");
+        setMicStatus("Listening... Keep holding");
+
         try {
-          finalTranscriptRef.current = "";
-          setInputText("");
-          setMicStatus("Listening... Keep holding");
-          setIsListening(true);
           recognitionRef.current.start();
         } catch (err) {
-          console.error(err);
-          setMicStatus("Could not start microphone");
+          // Already started
         }
       };
 
       const stopListening = () => {
+        isHoldingRef.current = false;
+
         if (recognitionRef.current) {
           try {
             recognitionRef.current.stop();
           } catch (e) {}
         }
+
         setIsListening(false);
 
-        const finalText = (finalTranscriptRef.current || inputText || "").trim();
-        if (finalText) {
-          setMicStatus("Got it. Sending...");
+        const textToSend = (finalTextRef.current || inputText || "").trim();
+
+        if (textToSend) {
+          setMicStatus("Sending...");
           setTimeout(() => {
-            sendMessage(finalText);
-          }, 300);
+            sendMessage(textToSend);
+          }, 250);
         } else {
           setMicStatus("No speech detected. Try again.");
         }
@@ -284,6 +284,8 @@
 
         setInputText("");
         setMicStatus("");
+        finalTextRef.current = "";
+
         setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
         setIsTyping(true);
 
