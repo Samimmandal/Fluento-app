@@ -58,6 +58,23 @@
             background: rgba(16, 185, 129, 0.08);
             border: 1px solid rgba(16, 185, 129, 0.2);
         }
+        .edit-textarea {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1rem;
+            line-height: 1.6;
+            padding: 1rem 1.25rem;
+            border-radius: 1rem;
+            width: 100%;
+            min-height: 80px;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+        .edit-textarea:focus {
+            outline: none;
+            border-color: #f43f5e;
+        }
     </style>
 </head>
 <body class="bg-black">
@@ -71,7 +88,6 @@
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const WORKER_URL = "https://morning-bonus-5828.imsamimmandal601.workers.dev";
 
-        // Perplexity-style microphone icon (clean, minimal)
         const MicIcon = ({ size = 28, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -124,6 +140,7 @@
             const isRestartingRef = useRef(false);
             const permissionDeniedRef = useRef(false);
             const replyTimerRef = useRef(null);
+            const textareaRef = useRef(null);
 
             const sessionRef = useRef(session);
             const levelRef = useRef(level);
@@ -153,6 +170,13 @@
             useEffect(() => {
                 messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
             }, [messages, isTyping]);
+
+            // Auto-focus textarea when review mode opens
+            useEffect(() => {
+                if (isReviewingVoice && textareaRef.current) {
+                    textareaRef.current.focus();
+                }
+            }, [isReviewingVoice]);
 
             const stripPunctuation = (text) => text
                 .replace(/[.,!?;:"“”‘’()\[\]{}…]/g, "")
@@ -495,7 +519,6 @@
                 setIsTyping(true);
                 isTypingRef.current = true;
 
-                // Show user's message briefly
                 setLastReply(`You: ${trimmed}`);
                 setShowReply(true);
                 if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
@@ -687,7 +710,7 @@
                 );
             }
 
-            // Voice mode: Perplexity-style voice interface
+            // Voice mode: Perplexity-style voice interface with editable review
             if (mode === "voice") {
                 return (
                     <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
@@ -770,8 +793,8 @@
                                 ) : null}
                             </div>
 
-                            {/* Microphone button */}
-                            {!isReviewingVoice && (
+                            {/* Microphone button or review textarea */}
+                            {!isReviewingVoice ? (
                                 <div className="relative">
                                     {isListening && (
                                         <div className="absolute inset-0 -m-6 rounded-full border-2 border-rose-500/40 pulse-ring"></div>
@@ -796,30 +819,38 @@
                                         />
                                     </button>
                                 </div>
-                            )}
-
-                            {/* Review actions */}
-                            {isReviewingVoice && inputText && (
-                                <div className="flex gap-3 mt-8">
-                                    <button
-                                        onClick={handleDiscardVoiceReview}
-                                        className="px-5 py-2.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-sm font-medium text-neutral-300"
-                                    >
-                                        Discard
-                                    </button>
-                                    <button
-                                        onClick={handleRetryVoiceReview}
-                                        className="px-5 py-2.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-sm font-medium text-neutral-300 flex items-center gap-2"
-                                    >
-                                        <MicIcon size={16} /> Re-record
-                                    </button>
-                                    <button
-                                        onClick={handleSendVoiceReview}
-                                        disabled={!inputText.trim()}
-                                        className="px-5 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 disabled:opacity-40 disabled:hover:bg-rose-500 text-white text-sm font-medium"
-                                    >
-                                        Send
-                                    </button>
+                            ) : (
+                                // Review mode: editable textarea and action buttons
+                                <div className="w-full max-w-xl flex flex-col gap-4 px-4">
+                                    <textarea
+                                        ref={textareaRef}
+                                        value={inputText}
+                                        onChange={(e) => setInputText(e.target.value)}
+                                        rows={3}
+                                        placeholder="Edit your message…"
+                                        className="edit-textarea"
+                                    />
+                                    <div className="flex gap-3 justify-center">
+                                        <button
+                                            onClick={handleDiscardVoiceReview}
+                                            className="px-5 py-2.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-sm font-medium text-neutral-300"
+                                        >
+                                            Discard
+                                        </button>
+                                        <button
+                                            onClick={handleRetryVoiceReview}
+                                            className="px-5 py-2.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-sm font-medium text-neutral-300 flex items-center gap-2"
+                                        >
+                                            <MicIcon size={16} /> Re-record
+                                        </button>
+                                        <button
+                                            onClick={handleSendVoiceReview}
+                                            disabled={!inputText.trim()}
+                                            className="px-5 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 disabled:opacity-40 disabled:hover:bg-rose-500 text-white text-sm font-medium"
+                                        >
+                                            Send
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
