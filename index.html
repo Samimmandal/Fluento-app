@@ -56,7 +56,6 @@
 
       const messagesEndRef = useRef(null);
       const recognitionRef = useRef(null);
-      const isHoldingRef = useRef(false);
       const finalTextRef = useRef("");
 
       useEffect(() => {
@@ -78,7 +77,7 @@
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, [messages, isTyping]);
 
-      // Speech Recognition - Fixed repeating issue
+      // More stable Speech Recognition (Toggle mode)
       useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -87,59 +86,50 @@
         }
 
         const recognition = new SpeechRecognition();
-        recognition.continuous = true;
+        recognition.continuous = false;       // More stable
         recognition.interimResults = true;
         recognition.lang = "en-US";
+        recognition.maxAlternatives = 1;
 
         recognition.onstart = () => {
           setIsListening(true);
-          setMicStatus("Listening... Keep holding");
+          setMicStatus("Listening... Tap mic again when finished");
+          finalTextRef.current = "";
         };
 
         recognition.onresult = (event) => {
-          let interim = "";
-          let final = "";
-
-          for (let i = 0; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-              final += transcript + " ";
-            } else {
-              interim += transcript;
-            }
+          let transcript = "";
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
           }
-
-          finalTextRef.current = final.trim();
-          setInputText((final + interim).trim());
+          setInputText(transcript.trim());
+          if (event.results[event.results.length - 1].isFinal) {
+            finalTextRef.current = transcript.trim();
+          }
         };
 
         recognition.onerror = (event) => {
+          console.error("Speech error:", event.error);
+          setIsListening(false);
           if (event.error === "not-allowed") {
-            setMicStatus("Microphone permission denied. Please allow it.");
-          } else if (event.error !== "aborted") {
+            setMicStatus("Microphone permission denied");
+          } else if (event.error === "no-speech") {
+            setMicStatus("No speech detected");
+          } else {
             setMicStatus("Error: " + event.error);
           }
-          setIsListening(false);
-          isHoldingRef.current = false;
         };
 
         recognition.onend = () => {
           setIsListening(false);
-          // Only restart if user is still holding
-          if (isHoldingRef.current) {
-            try {
-              recognition.start();
-            } catch (e) {}
-          }
         };
 
         recognitionRef.current = recognition;
       }, []);
 
-      // Force "Daniel - Steady Broadcaster" voice
+      // Prefer Daniel - Steady Broadcaster voice
       const speakText = (text) => {
         if (!window.speechSynthesis) return;
-
         window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
@@ -147,8 +137,6 @@
         utterance.pitch = 1;
 
         const voices = window.speechSynthesis.getVoices();
-
-        // Look for exact or close match to "Daniel - Steady Broadcaster"
         let selectedVoice = voices.find(v => 
           v.name.toLowerCase().includes("daniel") && 
           (v.name.toLowerCase().includes("steady") || v.name.toLowerCase().includes("broadcaster"))
@@ -160,15 +148,11 @@
 
         if (selectedVoice) {
           utterance.voice = selectedVoice;
-          console.log("Using voice:", selectedVoice.name);
-        } else {
-          console.log("Daniel voice not found. Available voices:", voices.map(v => v.name));
         }
 
         window.speechSynthesis.speak(utterance);
       };
 
-      // Load voices
       useEffect(() => {
         if (window.speechSynthesis) {
           window.speechSynthesis.getVoices();
@@ -178,41 +162,36 @@
         }
       }, []);
 
-      const startListening = () => {
-        if (!recognitionRef.current) return;
-
-        isHoldingRef.current = true;
-        finalTextRef.current = "";
-        setInputText("");
-        setMicStatus("Listening... Keep holding");
-
-        try {
-          recognitionRef.current.start();
-        } catch (err) {
-          // Already started
+      const toggleListening = () => {
+        if (!recognitionRef.current) {
+          setMicStatus("Speech recognition not available");
+          return;
         }
-      };
 
-      const stopListening = () => {
-        isHoldingRef.current = false;
-
-        if (recognitionRef.current) {
+        if (isListening) {
+          // Stop and send
           try {
             recognitionRef.current.stop();
           } catch (e) {}
-        }
+          setIsListening(false);
 
-        setIsListening(false);
-
-        const textToSend = (finalTextRef.current || inputText || "").trim();
-
-        if (textToSend) {
-          setMicStatus("Sending...");
-          setTimeout(() => {
-            sendMessage(textToSend);
-          }, 250);
+          const textToSend = (finalTextRef.current || inputText || "").trim();
+          if (textToSend) {
+            setMicStatus("Sending...");
+            setTimeout(() => sendMessage(textToSend), 200);
+          } else {
+            setMicStatus("No speech detected");
+          }
         } else {
-          setMicStatus("No speech detected. Try again.");
+          // Start listening
+          finalTextRef.current = "";
+          setInputText("");
+          setMicStatus("Listening... Tap mic again when finished");
+          try {
+            recognitionRef.current.start();
+          } catch (err) {
+            setMicStatus("Could not start microphone");
+          }
         }
       };
 
@@ -412,7 +391,7 @@
                     </div>
                     <div>
                       <div className="font-medium text-lg">Speak with AI</div>
-                      <div className="text-sm text-neutral-400">Hold mic to speak • AI replies with voice</div>
+                      <div className="text-sm text-neutral-400">Tap mic to speak • AI replies with voice</div>
                     </div>
                   </div>
                 </button>
@@ -530,12 +509,8 @@
                     )}
 
                     <button
-                      onMouseDown={startListening}
-                      onMouseUp={stopListening}
-                      onMouseLeave={stopListening}
-                      onTouchStart={startListening}
-                      onTouchEnd={stopListening}
-                      className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 select-none ${
+                      onClick={toggleListening}
+                      className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
                         isListening 
                           ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50" 
                           : "bg-neutral-800 hover:bg-neutral-700"
@@ -545,7 +520,7 @@
                     </button>
 
                     <p className="text-xs text-neutral-400 text-center">
-                      {micStatus || (isListening ? "Listening... Keep holding" : "Hold the mic button and speak")}
+                      {micStatus || (isListening ? "Listening... Tap mic again to send" : "Tap the mic button to speak")}
                     </p>
                   </div>
                 ) : (
