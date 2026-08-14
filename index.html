@@ -16,26 +16,47 @@
     </script>
     <style>
         @keyframes pulse-ring {
-            0% { transform: scale(1); opacity: 0.7; }
-            50% { transform: scale(1.15); opacity: 0.3; }
-            100% { transform: scale(1); opacity: 0.7; }
+            0% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 0.2; }
+            100% { transform: scale(1); opacity: 0.6; }
         }
         .pulse-ring {
-            animation: pulse-ring 1.5s ease-in-out infinite;
+            animation: pulse-ring 1.8s ease-in-out infinite;
         }
+
+        @keyframes wave {
+            0%, 100% { transform: scaleY(0.3); }
+            50% { transform: scaleY(1); }
+        }
+        .wave-bar {
+            display: inline-block;
+            width: 4px;
+            margin: 0 2px;
+            background: currentColor;
+            border-radius: 2px;
+            animation: wave 0.8s ease-in-out infinite alternate;
+        }
+        .wave-bar:nth-child(1) { animation-delay: 0.0s; height: 18px; }
+        .wave-bar:nth-child(2) { animation-delay: 0.2s; height: 28px; }
+        .wave-bar:nth-child(3) { animation-delay: 0.4s; height: 38px; }
+        .wave-bar:nth-child(4) { animation-delay: 0.6s; height: 28px; }
+        .wave-bar:nth-child(5) { animation-delay: 0.8s; height: 18px; }
+
         .mic-btn {
             transition: all 0.2s ease;
         }
         .mic-btn:active {
             transform: scale(0.92);
         }
-        .whatsapp-voice {
-            background: radial-gradient(circle at center, rgba(34, 197, 94, 0.08) 0%, transparent 70%);
-        }
+
         .voice-transcript {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(8px);
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .voice-reply {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.2);
         }
     </style>
 </head>
@@ -50,10 +71,10 @@
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const WORKER_URL = "https://morning-bonus-5828.imsamimmandal601.workers.dev";
 
-        // WhatsApp-style microphone icon
+        // Perplexity-style microphone icon (clean, minimal)
         const MicIcon = ({ size = 28, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                 <line x1="12" x2="12" y1="19" y2="23" />
@@ -92,6 +113,7 @@
             const [isReviewingVoice, setIsReviewingVoice] = useState(false);
             const [lastReply, setLastReply] = useState("");
             const [showReply, setShowReply] = useState(false);
+            const [isSpeaking, setIsSpeaking] = useState(false);
 
             const messagesEndRef = useRef(null);
             const recognitionRef = useRef(null);
@@ -164,6 +186,7 @@
 
                 recognition.onstart = () => {
                     setIsListening(true);
+                    setIsSpeaking(false);
                     setMicStatus("Listening… tap mic to stop");
                     isRestartingRef.current = false;
                     restartFailureCount = 0;
@@ -204,6 +227,7 @@
 
                 recognition.onend = () => {
                     setIsListening(false);
+                    setIsSpeaking(false);
 
                     if (sessionFinalRef.current) {
                         committedTranscriptRef.current = stripPunctuation(
@@ -278,17 +302,19 @@
                 }
 
                 utterance.onstart = () => {
+                    setIsSpeaking(true);
                     setShowReply(true);
                     setLastReply(text);
                 };
                 utterance.onend = () => {
-                    // Keep reply visible for a while then fade
+                    setIsSpeaking(false);
                     if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
                     replyTimerRef.current = setTimeout(() => {
                         setShowReply(false);
                     }, 3000);
                 };
                 utterance.onerror = () => {
+                    setIsSpeaking(false);
                     if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
                     replyTimerRef.current = setTimeout(() => {
                         setShowReply(false);
@@ -329,6 +355,7 @@
                     setInputText("");
                     setIsReviewingVoice(false);
                     setShowReply(false);
+                    setIsSpeaking(false);
                     isManualStopRef.current = false;
                     isRestartingRef.current = false;
                     setMicStatus("Listening…");
@@ -388,6 +415,7 @@
                 setInputText("");
                 setLastReply("");
                 setShowReply(false);
+                setIsSpeaking(false);
                 if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
                 await supabase.auth.signOut();
                 setSession(null);
@@ -414,6 +442,7 @@
                 setInputText("");
                 setLastReply("");
                 setShowReply(false);
+                setIsSpeaking(false);
                 if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
                 setMode(chosenMode);
                 setShowModeModal(false);
@@ -632,8 +661,8 @@
                                             <MicIcon size={24} />
                                         </div>
                                         <div>
-                                            <div className="font-medium text-lg">Speak with AI</div>
-                                            <div className="text-sm text-neutral-400">Tap mic to speak • AI replies with voice</div>
+                                            <div className="font-medium text-lg">Voice Mode</div>
+                                            <div className="text-sm text-neutral-400">Speak naturally, get voice replies</div>
                                         </div>
                                     </div>
                                 </button>
@@ -647,8 +676,8 @@
                                             💬
                                         </div>
                                         <div>
-                                            <div className="font-medium text-lg">Chat with Samim</div>
-                                            <div className="text-sm text-neutral-400">Type messages • Get text replies</div>
+                                            <div className="font-medium text-lg">Text Mode</div>
+                                            <div className="text-sm text-neutral-400">Type messages, get text replies</div>
                                         </div>
                                     </div>
                                 </button>
@@ -658,7 +687,7 @@
                 );
             }
 
-            // Voice mode: WhatsApp-style voice recorder
+            // Voice mode: Perplexity-style voice interface
             if (mode === "voice") {
                 return (
                     <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
@@ -692,93 +721,112 @@
                             </div>
                         </div>
 
-                        {/* Main voice area - WhatsApp style */}
-                        <div className="flex-1 flex flex-col items-center justify-center relative bg-black">
-                            {/* Voice reply bubble - appears when AI speaks */}
-                            {showReply && lastReply && !isReviewingVoice && !inputText && (
-                                <div className="absolute top-12 left-0 right-0 flex justify-center px-4">
-                                    <div className="max-w-lg w-full bg-emerald-950/30 backdrop-blur-sm border border-emerald-800/40 rounded-2xl px-5 py-3.5 text-center">
-                                        <div className="text-emerald-300 text-sm font-medium leading-relaxed">
+                        {/* Main voice area - Perplexity style */}
+                        <div className="flex-1 flex flex-col items-center justify-center relative bg-black p-4">
+                            {/* Transcript / Reply display */}
+                            <div className="absolute top-12 left-0 right-0 flex justify-center px-4 pointer-events-none">
+                                <div className="max-w-2xl w-full text-center">
+                                    {isReviewingVoice && inputText && (
+                                        <div className="voice-transcript rounded-2xl px-5 py-4 text-neutral-200 text-base leading-relaxed">
+                                            {inputText}
+                                        </div>
+                                    )}
+                                    {!isReviewingVoice && inputText && (
+                                        <div className="voice-transcript rounded-2xl px-5 py-4 text-neutral-200 text-base leading-relaxed">
+                                            {inputText}
+                                        </div>
+                                    )}
+                                    {!isReviewingVoice && showReply && lastReply && !inputText && (
+                                        <div className="voice-reply rounded-2xl px-5 py-4 text-emerald-300 text-base leading-relaxed">
                                             {lastReply}
                                         </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Transcript preview - shows while speaking or reviewing */}
-                            {(inputText || isReviewingVoice) && (
-                                <div className="absolute top-12 left-0 right-0 flex justify-center px-4">
-                                    <div className="max-w-lg w-full bg-neutral-900/80 backdrop-blur-sm border border-neutral-700 rounded-2xl px-5 py-3.5 text-center">
-                                        <div className="text-neutral-200 text-sm leading-relaxed">
-                                            {isReviewingVoice ? inputText : inputText}
+                                    )}
+                                    {!isReviewingVoice && !inputText && !showReply && (
+                                        <div className="text-neutral-500 text-sm">
+                                            {isListening ? 'Listening...' : 'Say something...'}
                                         </div>
-                                        {isReviewingVoice && (
-                                            <div className="flex gap-2 mt-3 justify-center">
-                                                <button
-                                                    onClick={handleDiscardVoiceReview}
-                                                    className="px-4 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-300"
-                                                >
-                                                    Discard
-                                                </button>
-                                                <button
-                                                    onClick={handleRetryVoiceReview}
-                                                    className="px-4 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-300 flex items-center gap-1.5"
-                                                >
-                                                    <MicIcon size={14} /> Re-record
-                                                </button>
-                                                <button
-                                                    onClick={handleSendVoiceReview}
-                                                    disabled={!inputText.trim()}
-                                                    className="px-4 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 disabled:opacity-40 disabled:hover:bg-rose-500 text-white text-xs font-medium"
-                                                >
-                                                    Send
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
+                                    )}
                                 </div>
-                            )}
-
-                            {/* Status text */}
-                            <div className="text-sm text-neutral-500 text-center mb-8 min-h-[24px]">
-                                {isReviewingVoice ? 'Review your message' :
-                                 isListening ? 'Listening…' :
-                                 micStatus || (showReply ? '' : 'Say something...')}
                             </div>
 
-                            {/* WhatsApp-style mic button */}
+                            {/* Waveform / visualizer */}
+                            <div className="flex items-center justify-center gap-1 mb-6 text-rose-400">
+                                {isListening ? (
+                                    <div className="flex items-end h-10">
+                                        <span className="wave-bar"></span>
+                                        <span className="wave-bar"></span>
+                                        <span className="wave-bar"></span>
+                                        <span className="wave-bar"></span>
+                                        <span className="wave-bar"></span>
+                                    </div>
+                                ) : isSpeaking ? (
+                                    <div className="flex items-end h-10 text-emerald-400">
+                                        <span className="wave-bar"></span>
+                                        <span className="wave-bar"></span>
+                                        <span className="wave-bar"></span>
+                                        <span className="wave-bar"></span>
+                                        <span className="wave-bar"></span>
+                                    </div>
+                                ) : null}
+                            </div>
+
+                            {/* Microphone button */}
                             {!isReviewingVoice && (
                                 <div className="relative">
-                                    {/* Pulse ring when listening */}
                                     {isListening && (
-                                        <div className="absolute inset-0 -m-4 rounded-full border-2 border-rose-500/40 pulse-ring"></div>
+                                        <div className="absolute inset-0 -m-6 rounded-full border-2 border-rose-500/40 pulse-ring"></div>
+                                    )}
+                                    {isSpeaking && (
+                                        <div className="absolute inset-0 -m-6 rounded-full border-2 border-emerald-500/40 pulse-ring"></div>
                                     )}
 
                                     <button
                                         onClick={toggleListening}
-                                        className={`mic-btn w-24 h-24 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                        className={`mic-btn w-28 h-28 rounded-full flex items-center justify-center transition-all duration-200 ${
                                             isListening
                                                 ? "bg-rose-500 shadow-lg shadow-rose-500/40 scale-105"
-                                                : "bg-neutral-800 hover:bg-neutral-700"
+                                                : isSpeaking
+                                                    ? "bg-emerald-600 shadow-lg shadow-emerald-500/40"
+                                                    : "bg-neutral-800 hover:bg-neutral-700"
                                         }`}
                                     >
                                         <MicIcon 
-                                            size={34} 
-                                            className={isListening ? "text-white" : "text-neutral-400"} 
+                                            size={38} 
+                                            className={isListening || isSpeaking ? "text-white" : "text-neutral-400"} 
                                         />
                                     </button>
                                 </div>
                             )}
 
-                            {/* Hint text */}
-                            {!isReviewingVoice && !isListening && !showReply && (
-                                <div className="text-xs text-neutral-600 mt-6">
-                                    Tap the microphone to speak
+                            {/* Review actions */}
+                            {isReviewingVoice && inputText && (
+                                <div className="flex gap-3 mt-8">
+                                    <button
+                                        onClick={handleDiscardVoiceReview}
+                                        className="px-5 py-2.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-sm font-medium text-neutral-300"
+                                    >
+                                        Discard
+                                    </button>
+                                    <button
+                                        onClick={handleRetryVoiceReview}
+                                        className="px-5 py-2.5 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-sm font-medium text-neutral-300 flex items-center gap-2"
+                                    >
+                                        <MicIcon size={16} /> Re-record
+                                    </button>
+                                    <button
+                                        onClick={handleSendVoiceReview}
+                                        disabled={!inputText.trim()}
+                                        className="px-5 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 disabled:opacity-40 disabled:hover:bg-rose-500 text-white text-sm font-medium"
+                                    >
+                                        Send
+                                    </button>
                                 </div>
                             )}
-                            {isListening && (
+
+                            {/* Status hint */}
+                            {!isReviewingVoice && (
                                 <div className="text-xs text-neutral-500 mt-6">
-                                    Tap again to stop & send
+                                    {isListening ? 'Tap to stop and send' : isSpeaking ? 'AI is speaking...' : 'Tap the microphone to speak'}
                                 </div>
                             )}
                         </div>
