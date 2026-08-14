@@ -14,6 +14,30 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
     </script>
+    <style>
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.15); opacity: 0.3; }
+            100% { transform: scale(1); opacity: 0.7; }
+        }
+        .pulse-ring {
+            animation: pulse-ring 1.5s ease-in-out infinite;
+        }
+        .mic-btn {
+            transition: all 0.2s ease;
+        }
+        .mic-btn:active {
+            transform: scale(0.92);
+        }
+        .whatsapp-voice {
+            background: radial-gradient(circle at center, rgba(34, 197, 94, 0.08) 0%, transparent 70%);
+        }
+        .voice-transcript {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+    </style>
 </head>
 <body class="bg-black">
     <div id="root"></div>
@@ -26,12 +50,14 @@
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const WORKER_URL = "https://morning-bonus-5828.imsamimmandal601.workers.dev";
 
+        // WhatsApp-style microphone icon
         const MicIcon = ({ size = 28, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2" className={className}>
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
+                <line x1="12" x2="12" y1="19" y2="23" />
+                <line x1="8" x2="16" y1="23" y2="23" />
             </svg>
         );
 
@@ -63,25 +89,20 @@
             const [micStatus, setMicStatus] = useState("");
             const [showLevelModal, setShowLevelModal] = useState(false);
             const [showModeModal, setShowModeModal] = useState(false);
-            // True while the mic is stopped and showing an editable preview of
-            // what was heard, waiting for the user to Send / Re-record / Discard.
             const [isReviewingVoice, setIsReviewingVoice] = useState(false);
+            const [lastReply, setLastReply] = useState("");
+            const [showReply, setShowReply] = useState(false);
 
             const messagesEndRef = useRef(null);
             const recognitionRef = useRef(null);
             const interimRef = useRef("");
-            // Text finalized by *previous* recognition bursts within the current
-            // tap-to-talk session (see the continuous=false workaround below).
             const committedTranscriptRef = useRef("");
-            // Final text produced by the *current* (not-yet-ended) burst.
             const sessionFinalRef = useRef("");
             const isManualStopRef = useRef(false);
             const isRestartingRef = useRef(false);
             const permissionDeniedRef = useRef(false);
+            const replyTimerRef = useRef(null);
 
-            // --- Refs that mirror state, so callbacks captured once by the
-            // SpeechRecognition event handlers (set up in a mount-only effect)
-            // never read stale/null values for session, level, mode, isTyping. ---
             const sessionRef = useRef(session);
             const levelRef = useRef(level);
             const modeRef = useRef(mode);
@@ -111,29 +132,12 @@
                 messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
             }, [messages, isTyping]);
 
-            // Strips punctuation the recognizer sometimes auto-inserts (periods,
-            // question marks, commas, quotes, etc.) while keeping apostrophes
-            // inside contractions like "I'm" / "don't" intact.
             const stripPunctuation = (text) => text
                 .replace(/[.,!?;:"“”‘’()\[\]{}…]/g, "")
                 .replace(/\s+/g, " ")
                 .trim();
 
-            // Speech Recognition setup.
-            //
-            // IMPORTANT: continuous=true is unreliable on many Android/mobile
-            // Chrome builds — the native recognizer can re-finalize a *growing*
-            // version of the same phrase under new result indices ("can" ->
-            // "can you" -> "can you hear" -> "can you hear me" -> "can you hear
-            // me" again), which produces duplicated text no matter how the
-            // results are merged on the JS side. Desktop Chrome doesn't have
-            // this bug, which is why it only shows up on phones.
-            //
-            // The reliable workaround is to run recognition in short,
-            // non-continuous "bursts": each burst yields exactly one clean
-            // final phrase, and we immediately restart a new burst in the
-            // background so listening still feels continuous to the user. The
-            // finished bursts are stitched together in committedTranscriptRef.
+            // Speech Recognition setup
             useEffect(() => {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 if (!SpeechRecognition) {
@@ -147,9 +151,6 @@
                 recognition.lang = "en-US";
                 recognition.maxAlternatives = 1;
 
-                // Caps how many times we'll auto-restart in a row after a
-                // recoverable error, so a persistent problem (e.g. no mic
-                // hardware) can't spam infinite restart attempts.
                 let restartFailureCount = 0;
 
                 const updateDisplay = () => {
@@ -163,7 +164,7 @@
 
                 recognition.onstart = () => {
                     setIsListening(true);
-                    setMicStatus("Listening… tap mic to stop & send");
+                    setMicStatus("Listening… tap mic to stop");
                     isRestartingRef.current = false;
                     restartFailureCount = 0;
                 };
@@ -195,8 +196,7 @@
                         permissionDeniedRef.current = true;
                         setMicStatus("No microphone found");
                     } else if (event.error === "no-speech") {
-                        // Expected often with short bursts; onend will restart.
-                        setMicStatus("Listening… tap mic to stop & send");
+                        setMicStatus("Listening… tap mic to stop");
                     } else if (event.error !== "aborted") {
                         setMicStatus("Error: " + event.error);
                     }
@@ -205,7 +205,6 @@
                 recognition.onend = () => {
                     setIsListening(false);
 
-                    // Fold whatever this burst finalized into the running total.
                     if (sessionFinalRef.current) {
                         committedTranscriptRef.current = stripPunctuation(
                             committedTranscriptRef.current + " " + sessionFinalRef.current
@@ -218,7 +217,6 @@
                         isManualStopRef.current = false;
                         const textToSend = committedTranscriptRef.current.trim();
                         if (textToSend) {
-                            // Don't auto-send — let the user review/edit first.
                             setInputText(textToSend);
                             setIsReviewingVoice(true);
                             setMicStatus("");
@@ -228,8 +226,6 @@
                         return;
                     }
 
-                    // Not a manual stop, and mic is still supposed to be
-                    // listening: start the next burst so it feels continuous.
                     if (permissionDeniedRef.current) return;
                     if (!isRestartingRef.current) {
                         isRestartingRef.current = true;
@@ -237,10 +233,6 @@
                             try {
                                 recognitionRef.current.start();
                             } catch (e) {
-                                // Recognizer can throw InvalidStateError if the
-                                // previous session hasn't fully torn down yet;
-                                // back off briefly and try a couple more times
-                                // before giving up so we don't spam forever.
                                 restartFailureCount += 1;
                                 if (restartFailureCount <= 3) {
                                     setTimeout(() => {
@@ -262,8 +254,7 @@
                 recognitionRef.current = recognition;
             }, []);
 
-
-            // Prefer Daniel voice
+            // Speak text with speech synthesis
             const speakText = (text) => {
                 if (!window.speechSynthesis) return;
                 window.speechSynthesis.cancel();
@@ -286,6 +277,24 @@
                     utterance.voice = selectedVoice;
                 }
 
+                utterance.onstart = () => {
+                    setShowReply(true);
+                    setLastReply(text);
+                };
+                utterance.onend = () => {
+                    // Keep reply visible for a while then fade
+                    if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
+                    replyTimerRef.current = setTimeout(() => {
+                        setShowReply(false);
+                    }, 3000);
+                };
+                utterance.onerror = () => {
+                    if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
+                    replyTimerRef.current = setTimeout(() => {
+                        setShowReply(false);
+                    }, 3000);
+                };
+
                 window.speechSynthesis.speak(utterance);
             };
 
@@ -296,6 +305,9 @@
                         window.speechSynthesis.getVoices();
                     };
                 }
+                return () => {
+                    if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
+                };
             }, []);
 
             const toggleListening = () => {
@@ -305,19 +317,18 @@
                 }
 
                 if (isListening) {
-                    // User wants to stop and send
                     isManualStopRef.current = true;
                     try {
                         recognitionRef.current.stop();
                     } catch (e) { /* ignore */ }
                 } else {
-                    // Start listening – reset transcript state
                     committedTranscriptRef.current = "";
                     sessionFinalRef.current = "";
                     interimRef.current = "";
                     permissionDeniedRef.current = false;
                     setInputText("");
                     setIsReviewingVoice(false);
+                    setShowReply(false);
                     isManualStopRef.current = false;
                     isRestartingRef.current = false;
                     setMicStatus("Listening…");
@@ -329,14 +340,12 @@
                 }
             };
 
-            // Sends the (possibly hand-edited) reviewed transcript.
             const handleSendVoiceReview = () => {
                 const text = inputText.trim();
                 setIsReviewingVoice(false);
                 if (text) sendMessage(text);
             };
 
-            // Throws away the transcript without sending.
             const handleDiscardVoiceReview = () => {
                 setIsReviewingVoice(false);
                 setInputText("");
@@ -344,7 +353,6 @@
                 committedTranscriptRef.current = "";
             };
 
-            // Discards the transcript and immediately starts listening again.
             const handleRetryVoiceReview = () => {
                 setIsReviewingVoice(false);
                 setInputText("");
@@ -373,11 +381,14 @@
             const handleLogout = async () => {
                 if (recognitionRef.current) {
                     isManualStopRef.current = false;
-                    permissionDeniedRef.current = true; // prevent auto-restart
+                    permissionDeniedRef.current = true;
                     try { recognitionRef.current.stop(); } catch (e) { /* ignore */ }
                 }
                 setIsReviewingVoice(false);
                 setInputText("");
+                setLastReply("");
+                setShowReply(false);
+                if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
                 await supabase.auth.signOut();
                 setSession(null);
                 setMessages([]);
@@ -396,18 +407,29 @@
             const handleSelectMode = (chosenMode) => {
                 if (recognitionRef.current && isListening) {
                     isManualStopRef.current = false;
-                    permissionDeniedRef.current = true; // prevent auto-restart during teardown
+                    permissionDeniedRef.current = true;
                     try { recognitionRef.current.stop(); } catch (e) { /* ignore */ }
                 }
                 setIsReviewingVoice(false);
                 setInputText("");
+                setLastReply("");
+                setShowReply(false);
+                if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
                 setMode(chosenMode);
                 setShowModeModal(false);
-                setMessages([{
-                    sender: "partner",
-                    text: `Hey there! I'm your English speaking practice partner. You're in ${chosenMode === "voice" ? "Voice" : "Text"} mode at ${level} level. What's on your mind today?`,
-                    correction: null
-                }]);
+                if (chosenMode === "voice") {
+                    const welcome = `Hey there! I'm your English speaking practice partner. You're in Voice mode at ${level} level. What's on your mind today?`;
+                    setMessages([{ sender: "partner", text: welcome, correction: null }]);
+                    setLastReply(welcome);
+                    setShowReply(true);
+                    speakText(welcome);
+                } else {
+                    setMessages([{
+                        sender: "partner",
+                        text: `Hey there! I'm your English speaking practice partner. You're in Text mode at ${level} level. What's on your mind today?`,
+                        correction: null
+                    }]);
+                }
             };
 
             const parseCorrection = (rawText) => {
@@ -429,23 +451,25 @@
                 return { text: rawText, correction: null };
             };
 
-            // Reads session/level/mode/isTyping from refs (not state) so this
-            // function works correctly even when invoked from a stale closure
-            // captured by the mount-only SpeechRecognition event handlers.
             const sendMessage = async (text) => {
                 const trimmed = (text || "").trim();
                 if (!trimmed || isTypingRef.current || !levelRef.current || !sessionRef.current) return;
 
-                // Clear mic state
                 setInputText("");
                 setMicStatus("");
                 committedTranscriptRef.current = "";
                 sessionFinalRef.current = "";
                 interimRef.current = "";
+                setShowReply(false);
 
                 setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
                 setIsTyping(true);
                 isTypingRef.current = true;
+
+                // Show user's message briefly
+                setLastReply(`You: ${trimmed}`);
+                setShowReply(true);
+                if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
 
                 try {
                     const controller = new AbortController();
@@ -473,24 +497,47 @@
                         }]);
 
                         if (modeRef.current === "voice") {
+                            setLastReply(parsed.text);
+                            setShowReply(true);
                             speakText(parsed.text);
+                        } else {
+                            setLastReply(parsed.text);
+                            setShowReply(true);
+                            if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
+                            replyTimerRef.current = setTimeout(() => {
+                                setShowReply(false);
+                            }, 5000);
                         }
                     } else {
-                        setMessages(prev => [...prev, {
-                            sender: "partner",
-                            text: "Sorry, I had trouble understanding. Can you try again?",
-                            correction: null
-                        }]);
+                        const errorMsg = "Sorry, I had trouble understanding. Can you try again?";
+                        setMessages(prev => [...prev, { sender: "partner", text: errorMsg, correction: null }]);
+                        setLastReply(errorMsg);
+                        setShowReply(true);
+                        if (modeRef.current === "voice") {
+                            speakText(errorMsg);
+                        } else {
+                            if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
+                            replyTimerRef.current = setTimeout(() => {
+                                setShowReply(false);
+                            }, 5000);
+                        }
                     }
                 } catch (err) {
                     console.error("sendMessage error:", err);
-                    setMessages(prev => [...prev, {
-                        sender: "partner",
-                        text: err.name === "AbortError"
-                            ? "That took too long to respond. Please try again."
-                            : "Connection problem. Please try again.",
-                        correction: null
-                    }]);
+                    const errorMsg = err.name === "AbortError"
+                        ? "That took too long to respond. Please try again."
+                        : "Connection problem. Please try again.";
+                    setMessages(prev => [...prev, { sender: "partner", text: errorMsg, correction: null }]);
+                    setLastReply(errorMsg);
+                    setShowReply(true);
+                    if (modeRef.current === "voice") {
+                        speakText(errorMsg);
+                    } else {
+                        if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
+                        replyTimerRef.current = setTimeout(() => {
+                            setShowReply(false);
+                        }, 5000);
+                    }
                 }
                 setIsTyping(false);
                 isTypingRef.current = false;
@@ -611,6 +658,135 @@
                 );
             }
 
+            // Voice mode: WhatsApp-style voice recorder
+            if (mode === "voice") {
+                return (
+                    <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
+                        {/* Sidebar */}
+                        <div className="w-64 border-r border-neutral-800 hidden md:flex flex-col justify-between p-6">
+                            <div>
+                                <div className="flex items-center gap-3 mb-8">
+                                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 flex items-center justify-center">
+                                        <MicIcon size={20} />
+                                    </div>
+                                    <span className="font-semibold">Fluento</span>
+                                </div>
+                                <div className="text-xs text-neutral-500 mb-1">Logged in as</div>
+                                <div className="text-sm text-neutral-300 truncate mb-6">{session.user.email}</div>
+                            </div>
+                            <div className="space-y-3">
+                                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
+                                    <div className="text-xs text-neutral-500">Level</div>
+                                    <div className="text-sm text-rose-400">{level}</div>
+                                </div>
+                                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
+                                    <div className="text-xs text-neutral-500">Mode</div>
+                                    <div className="text-sm text-rose-400">Voice</div>
+                                </div>
+                                <button onClick={() => setShowModeModal(true)} className="w-full text-sm bg-neutral-800 hover:bg-neutral-700 py-2 rounded-xl">
+                                    Change Mode
+                                </button>
+                                <button onClick={handleLogout} className="w-full text-sm text-red-400 hover:bg-red-950/30 py-2 rounded-xl">
+                                    Logout
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Main voice area - WhatsApp style */}
+                        <div className="flex-1 flex flex-col items-center justify-center relative bg-black">
+                            {/* Voice reply bubble - appears when AI speaks */}
+                            {showReply && lastReply && !isReviewingVoice && !inputText && (
+                                <div className="absolute top-12 left-0 right-0 flex justify-center px-4">
+                                    <div className="max-w-lg w-full bg-emerald-950/30 backdrop-blur-sm border border-emerald-800/40 rounded-2xl px-5 py-3.5 text-center">
+                                        <div className="text-emerald-300 text-sm font-medium leading-relaxed">
+                                            {lastReply}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Transcript preview - shows while speaking or reviewing */}
+                            {(inputText || isReviewingVoice) && (
+                                <div className="absolute top-12 left-0 right-0 flex justify-center px-4">
+                                    <div className="max-w-lg w-full bg-neutral-900/80 backdrop-blur-sm border border-neutral-700 rounded-2xl px-5 py-3.5 text-center">
+                                        <div className="text-neutral-200 text-sm leading-relaxed">
+                                            {isReviewingVoice ? inputText : inputText}
+                                        </div>
+                                        {isReviewingVoice && (
+                                            <div className="flex gap-2 mt-3 justify-center">
+                                                <button
+                                                    onClick={handleDiscardVoiceReview}
+                                                    className="px-4 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-300"
+                                                >
+                                                    Discard
+                                                </button>
+                                                <button
+                                                    onClick={handleRetryVoiceReview}
+                                                    className="px-4 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-300 flex items-center gap-1.5"
+                                                >
+                                                    <MicIcon size={14} /> Re-record
+                                                </button>
+                                                <button
+                                                    onClick={handleSendVoiceReview}
+                                                    disabled={!inputText.trim()}
+                                                    className="px-4 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 disabled:opacity-40 disabled:hover:bg-rose-500 text-white text-xs font-medium"
+                                                >
+                                                    Send
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Status text */}
+                            <div className="text-sm text-neutral-500 text-center mb-8 min-h-[24px]">
+                                {isReviewingVoice ? 'Review your message' :
+                                 isListening ? 'Listening…' :
+                                 micStatus || (showReply ? '' : 'Say something...')}
+                            </div>
+
+                            {/* WhatsApp-style mic button */}
+                            {!isReviewingVoice && (
+                                <div className="relative">
+                                    {/* Pulse ring when listening */}
+                                    {isListening && (
+                                        <div className="absolute inset-0 -m-4 rounded-full border-2 border-rose-500/40 pulse-ring"></div>
+                                    )}
+
+                                    <button
+                                        onClick={toggleListening}
+                                        className={`mic-btn w-24 h-24 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                            isListening
+                                                ? "bg-rose-500 shadow-lg shadow-rose-500/40 scale-105"
+                                                : "bg-neutral-800 hover:bg-neutral-700"
+                                        }`}
+                                    >
+                                        <MicIcon 
+                                            size={34} 
+                                            className={isListening ? "text-white" : "text-neutral-400"} 
+                                        />
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Hint text */}
+                            {!isReviewingVoice && !isListening && !showReply && (
+                                <div className="text-xs text-neutral-600 mt-6">
+                                    Tap the microphone to speak
+                                </div>
+                            )}
+                            {isListening && (
+                                <div className="text-xs text-neutral-500 mt-6">
+                                    Tap again to stop & send
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Text mode: standard chat
             return (
                 <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
                     {/* Sidebar */}
@@ -632,7 +808,7 @@
                             </div>
                             <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
                                 <div className="text-xs text-neutral-500">Mode</div>
-                                <div className="text-sm text-rose-400">{mode === "voice" ? "Voice" : "Text"}</div>
+                                <div className="text-sm text-rose-400">Text</div>
                             </div>
                             <button onClick={() => setShowModeModal(true)} className="w-full text-sm bg-neutral-800 hover:bg-neutral-700 py-2 rounded-xl">
                                 Change Mode
@@ -645,18 +821,16 @@
 
                     {/* Main chat area */}
                     <div className="flex-1 flex flex-col relative">
-                        {/* Header */}
                         <div className="h-16 border-b border-neutral-800 flex items-center justify-between px-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></div>
                                 <span className="text-sm">Live Practice Session</span>
                             </div>
                             <span className="text-xs px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800">
-                                {level} · {mode === "voice" ? "Voice" : "Text"}
+                                {level} · Text
                             </span>
                         </div>
 
-                        {/* Messages */}
                         <div className="flex-1 overflow-y-auto pt-6 pb-40 px-4 md:px-8 space-y-6 max-w-3xl mx-auto w-full">
                             {messages.map((msg, idx) => (
                                 <div key={idx} className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}>
@@ -667,7 +841,6 @@
                                     }`}>
                                         {msg.text}
                                     </div>
-
                                     {msg.correction && (
                                         <div className="mt-3 max-w-xl w-full bg-neutral-900 border border-rose-900/40 rounded-2xl p-4 text-sm">
                                             <div className="font-semibold text-rose-400 flex items-center gap-2 mb-2">
@@ -685,96 +858,31 @@
                                     )}
                                 </div>
                             ))}
-
                             {isTyping && (
                                 <div className="flex items-center gap-2 text-neutral-500 text-sm">
                                     <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce"></div>
-                                    <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}>
-                                    </div>
-                                    <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}>
-                                    </div>
+                                    <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                                    <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
                                     <span className="text-xs">Partner is speaking...</span>
                                 </div>
                             )}
                             <div ref={messagesEndRef} />
                         </div>
 
-                        {/* Input area */}
                         <div className="absolute bottom-0 left-0 right-0 p-4 bg-black border-t border-neutral-800">
                             <div className="max-w-3xl mx-auto">
-                                {mode === "voice" ? (
-                                    isReviewingVoice ? (
-                                        <div className="flex flex-col gap-3">
-                                            <textarea
-                                                value={inputText}
-                                                onChange={(e) => setInputText(e.target.value)}
-                                                rows={2}
-                                                autoFocus
-                                                placeholder="Edit what you said..."
-                                                className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-rose-500 resize-none"
-                                            />
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={handleDiscardVoiceReview}
-                                                    className="flex-1 py-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-sm font-medium text-neutral-300"
-                                                >
-                                                    Discard
-                                                </button>
-                                                <button
-                                                    onClick={handleRetryVoiceReview}
-                                                    className="flex-1 py-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-sm font-medium text-neutral-300 flex items-center justify-center gap-1.5"
-                                                >
-                                                    <MicIcon size={16} /> Re-record
-                                                </button>
-                                                <button
-                                                    onClick={handleSendVoiceReview}
-                                                    disabled={!inputText.trim()}
-                                                    className="flex-1 py-3 rounded-2xl bg-rose-500 hover:bg-rose-600 disabled:opacity-40 disabled:hover:bg-rose-500 text-white text-sm font-medium"
-                                                >
-                                                    Send
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center gap-3">
-                                            {inputText && (
-                                                <div className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2.5 text-sm text-neutral-200 text-center">
-                                                    {inputText}
-                                                </div>
-                                            )}
-
-                                            <div className="flex items-center justify-center">
-                                                <button
-                                                    onClick={toggleListening}
-                                                    className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                                        isListening
-                                                            ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50"
-                                                            : "bg-neutral-800 hover:bg-neutral-700"
-                                                    }`}
-                                                >
-                                                    <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
-                                                </button>
-                                            </div>
-
-                                            <p className="text-xs text-neutral-400 text-center min-h-[20px]">
-                                                {micStatus || (isListening ? "Listening… tap mic to stop & send" : "Tap the mic button to speak")}
-                                            </p>
-                                        </div>
-                                    )
-                                ) : (
-                                    <form onSubmit={handleSendMessage} className="flex gap-3 items-center">
-                                        <input
-                                            value={inputText}
-                                            onChange={(e) => setInputText(e.target.value)}
-                                            onKeyDown={handleKeyDown}
-                                            placeholder="Type your message..."
-                                            className="flex-1 bg-neutral-900 border border-neutral-700 rounded-2xl px-5 py-3 text-white focus:outline-none focus:border-rose-500"
-                                        />
-                                        <button type="submit" className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-2xl font-medium">
-                                            Send
-                                        </button>
-                                    </form>
-                                )}
+                                <form onSubmit={handleSendMessage} className="flex gap-3 items-center">
+                                    <input
+                                        value={inputText}
+                                        onChange={(e) => setInputText(e.target.value)}
+                                        onKeyDown={handleKeyDown}
+                                        placeholder="Type your message..."
+                                        className="flex-1 bg-neutral-900 border border-neutral-700 rounded-2xl px-5 py-3 text-white focus:outline-none focus:border-rose-500"
+                                    />
+                                    <button type="submit" className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-2xl font-medium">
+                                        Send
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     </div>
