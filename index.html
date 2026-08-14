@@ -55,6 +55,7 @@
       const [showModeModal, setShowModeModal] = useState(false);
       const messagesEndRef = useRef(null);
       const recognitionRef = useRef(null);
+      const finalTranscriptRef = useRef("");
 
       useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -75,65 +76,109 @@
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, [messages, isTyping]);
 
-      // Better Speech Recognition setup
+      // Improved Speech Recognition - True Hold to Talk
       useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-          setMicStatus("Speech recognition not supported in this browser. Use Chrome.");
+          setMicStatus("Speech recognition not supported. Please use Chrome.");
           return;
         }
 
         const recognition = new SpeechRecognition();
-        recognition.continuous = false;
+        recognition.continuous = true;          // Keep listening while held
         recognition.interimResults = true;
-        recognition.lang = "en-US";
+        recognition.lang = "en-IN";             // Prefer Indian English
         recognition.maxAlternatives = 1;
 
         recognition.onstart = () => {
           setIsListening(true);
-          setMicStatus("Listening... Speak now");
+          setMicStatus("Listening... Keep holding");
+          finalTranscriptRef.current = "";
         };
 
         recognition.onresult = (event) => {
-          let transcript = "";
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            transcript += event.results[i][0].transcript;
-          }
-          setInputText(transcript);
+          let interim = "";
+          let final = finalTranscriptRef.current;
 
-          if (event.results[event.results.length - 1].isFinal) {
-            setMicStatus("Got it: " + transcript);
-            setIsListening(false);
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              final += transcript + " ";
+              finalTranscriptRef.current = final;
+            } else {
+              interim += transcript;
+            }
           }
+          setInputText((final + interim).trim());
         };
 
         recognition.onerror = (event) => {
           console.error("Speech error:", event.error);
-          setIsListening(false);
           if (event.error === "not-allowed") {
-            setMicStatus("Microphone permission denied. Please allow microphone.");
-          } else if (event.error === "no-speech") {
-            setMicStatus("No speech detected. Try again.");
-          } else {
+            setMicStatus("Microphone permission denied. Please allow it.");
+          } else if (event.error !== "aborted") {
             setMicStatus("Error: " + event.error);
           }
+          setIsListening(false);
         };
 
         recognition.onend = () => {
-          setIsListening(false);
+          // If still supposed to be listening, restart (helps with continuous)
+          if (isListening) {
+            try {
+              recognition.start();
+            } catch (e) {}
+          }
         };
 
         recognitionRef.current = recognition;
       }, []);
 
+      // Prefer Indian / Male voice
       const speakText = (text) => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
+
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-US";
-        utterance.rate = 0.95;
+        utterance.lang = "en-IN";
+        utterance.rate = 0.92;
+        utterance.pitch = 0.95;
+
+        const voices = window.speechSynthesis.getVoices();
+        // Try to find Indian English or male voice
+        let selectedVoice = voices.find(v => 
+          v.lang === "en-IN" || v.lang.startsWith("en-IN")
+        );
+
+        if (!selectedVoice) {
+          selectedVoice = voices.find(v => 
+            v.name.toLowerCase().includes("male") || 
+            v.name.toLowerCase().includes("ravi") ||
+            v.name.toLowerCase().includes("indian")
+          );
+        }
+
+        if (!selectedVoice) {
+          // fallback to any English male-sounding voice
+          selectedVoice = voices.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("male"));
+        }
+
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+        }
+
         window.speechSynthesis.speak(utterance);
       };
+
+      // Load voices
+      useEffect(() => {
+        if (window.speechSynthesis) {
+          window.speechSynthesis.getVoices();
+          window.speechSynthesis.onvoiceschanged = () => {
+            window.speechSynthesis.getVoices();
+          };
+        }
+      }, []);
 
       const startListening = () => {
         if (!recognitionRef.current) {
@@ -141,8 +186,10 @@
           return;
         }
         try {
+          finalTranscriptRef.current = "";
           setInputText("");
-          setMicStatus("Starting...");
+          setMicStatus("Listening... Keep holding");
+          setIsListening(true);
           recognitionRef.current.start();
         } catch (err) {
           console.error(err);
@@ -151,11 +198,21 @@
       };
 
       const stopListening = () => {
-        if (recognitionRef.current && isListening) {
+        if (recognitionRef.current) {
           try {
             recognitionRef.current.stop();
           } catch (e) {}
-          setIsListening(false);
+        }
+        setIsListening(false);
+
+        const finalText = (finalTranscriptRef.current || inputText || "").trim();
+        if (finalText) {
+          setMicStatus("Got it. Sending...");
+          setTimeout(() => {
+            sendMessage(finalText);
+          }, 300);
+        } else {
+          setMicStatus("No speech detected. Try again.");
         }
       };
 
@@ -222,7 +279,7 @@
       };
 
       const sendMessage = async (text) => {
-        const trimmed = (text || inputText || "").trim();
+        const trimmed = (text || "").trim();
         if (!trimmed || isTyping || !level || !session) return;
 
         setInputText("");
@@ -353,7 +410,7 @@
                     </div>
                     <div>
                       <div className="font-medium text-lg">Speak with AI</div>
-                      <div className="text-sm text-neutral-400">Use microphone • AI replies with voice</div>
+                      <div className="text-sm text-neutral-400">Hold mic to speak • AI replies with voice</div>
                     </div>
                   </div>
                 </button>
@@ -470,34 +527,23 @@
                       </div>
                     )}
 
-                    <div className="flex items-center gap-4">
-                      <button
-                        onMouseDown={startListening}
-                        onMouseUp={stopListening}
-                        onMouseLeave={stopListening}
-                        onTouchStart={startListening}
-                        onTouchEnd={stopListening}
-                        className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
-                          isListening 
-                            ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50" 
-                            : "bg-neutral-800 hover:bg-neutral-700"
-                        }`}
-                      >
-                        <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
-                      </button>
-
-                      {inputText && (
-                        <button
-                          onClick={() => sendMessage(inputText)}
-                          className="bg-rose-500 hover:bg-rose-600 text-white px-5 py-3 rounded-2xl font-medium"
-                        >
-                          Send
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      onMouseDown={startListening}
+                      onMouseUp={stopListening}
+                      onMouseLeave={stopListening}
+                      onTouchStart={startListening}
+                      onTouchEnd={stopListening}
+                      className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 select-none ${
+                        isListening 
+                          ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50" 
+                          : "bg-neutral-800 hover:bg-neutral-700"
+                      }`}
+                    >
+                      <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
+                    </button>
 
                     <p className="text-xs text-neutral-400 text-center">
-                      {micStatus || (isListening ? "Listening... Release to stop" : "Hold the mic button and speak")}
+                      {micStatus || (isListening ? "Listening... Keep holding" : "Hold the mic button and speak")}
                     </p>
                   </div>
                 ) : (
