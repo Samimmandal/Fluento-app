@@ -28,7 +28,7 @@
 
         const MicIcon = ({ size = 28, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2" className={className}>
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                 <line x1="12" x2="12" y1="19" y2="22" />
@@ -68,9 +68,9 @@
             const recognitionRef = useRef(null);
             const transcriptRef = useRef("");
             const interimRef = useRef("");
-            const lastFinalRef = useRef("");
             const isManualStopRef = useRef(false);
             const isRestartingRef = useRef(false);
+            const sendTimeoutRef = useRef(null);
 
             useEffect(() => {
                 supabase.auth.getSession().then(({ data: { session } }) => {
@@ -91,7 +91,7 @@
                 messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
             }, [messages, isTyping]);
 
-            // Speech Recognition setup – continuous mode with manual control
+            // Speech Recognition setup – continuous with manual control
             useEffect(() => {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 if (!SpeechRecognition) {
@@ -107,7 +107,7 @@
 
                 recognition.onstart = () => {
                     setIsListening(true);
-                    setMicStatus("Listening… tap mic to stop & send");
+                    setMicStatus("Listening… tap mic to stop");
                     isManualStopRef.current = false;
                     isRestartingRef.current = false;
                 };
@@ -118,20 +118,15 @@
                     for (let i = event.resultIndex; i < event.results.length; i++) {
                         const result = event.results[i];
                         if (result.isFinal) {
+                            // Use the full transcript from the final result (it contains the whole utterance)
                             final = result[0].transcript.trim();
                         } else {
                             interim += result[0].transcript;
                         }
                     }
                     if (final) {
-                        // Append only if it's new (not a duplicate)
-                        if (final !== lastFinalRef.current) {
-                            // Avoid appending if it's already at the end
-                            if (!transcriptRef.current.endsWith(final)) {
-                                transcriptRef.current = (transcriptRef.current + " " + final).trim();
-                            }
-                            lastFinalRef.current = final;
-                        }
+                        // Replace the transcript with the latest final – avoids duplication
+                        transcriptRef.current = final;
                     }
                     interimRef.current = interim;
                     const display = (transcriptRef.current || "") + (interim ? " " + interim : "");
@@ -156,16 +151,20 @@
                         const textToSend = transcriptRef.current.trim();
                         if (textToSend) {
                             setMicStatus("Sending…");
-                            setTimeout(() => {
+                            // Clear any pending timeout
+                            if (sendTimeoutRef.current) clearTimeout(sendTimeoutRef.current);
+                            sendTimeoutRef.current = setTimeout(() => {
                                 sendMessage(textToSend);
-                            }, 150);
+                                sendTimeoutRef.current = null;
+                            }, 200);
                         } else {
                             setMicStatus("No speech to send");
                         }
                         isManualStopRef.current = false;
                     } else {
-                        // Unexpected end – restart if not already restarting
-                        if (!isRestartingRef.current) {
+                        // Unexpected end – restart if not already restarting and if still should be listening?
+                        // Only restart if we are still in a listening state (user hasn't manually stopped)
+                        if (!isRestartingRef.current && isListening) {
                             isRestartingRef.current = true;
                             setMicStatus("Reconnecting…");
                             setTimeout(() => {
@@ -233,10 +232,9 @@
                         recognitionRef.current.stop();
                     } catch (e) { /* ignore */ }
                 } else {
-                    // Start listening – reset transcript and lastFinal
+                    // Start listening – reset transcript
                     transcriptRef.current = "";
                     interimRef.current = "";
-                    lastFinalRef.current = "";
                     setInputText("");
                     isManualStopRef.current = false;
                     isRestartingRef.current = false;
@@ -313,14 +311,24 @@
 
             const sendMessage = async (text) => {
                 const trimmed = (text || "").trim();
-                if (!trimmed || isTyping || !level || !session) return;
+                if (!trimmed) {
+                    setMicStatus("Empty message");
+                    return;
+                }
+                if (isTyping) {
+                    setMicStatus("Please wait for previous reply");
+                    return;
+                }
+                if (!level || !session) {
+                    setMicStatus("Session not ready");
+                    return;
+                }
 
                 // Clear mic state
                 setInputText("");
                 setMicStatus("");
                 transcriptRef.current = "";
                 interimRef.current = "";
-                lastFinalRef.current = "";
 
                 setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
                 setIsTyping(true);
@@ -568,7 +576,7 @@
                             <div ref={messagesEndRef} />
                         </div>
 
-                        {/* Input area */}
+                        {/* Input area - WhatsApp style mic */}
                         <div className="absolute bottom-0 left-0 right-0 p-4 bg-black border-t border-neutral-800">
                             <div className="max-w-3xl mx-auto">
                                 {mode === "voice" ? (
@@ -582,18 +590,24 @@
                                         <div className="flex items-center justify-center">
                                             <button
                                                 onClick={toggleListening}
-                                                className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                                className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
                                                     isListening
                                                         ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50"
                                                         : "bg-neutral-800 hover:bg-neutral-700"
                                                 }`}
                                             >
-                                                <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
+                                                {isListening && (
+                                                    <span className="absolute inset-0 rounded-full animate-ping bg-rose-500/40"></span>
+                                                )}
+                                                <MicIcon 
+                                                    size={32} 
+                                                    className={isListening ? "text-white" : "text-neutral-300"} 
+                                                />
                                             </button>
                                         </div>
 
                                         <p className="text-xs text-neutral-400 text-center min-h-[20px]">
-                                            {micStatus || (isListening ? "Listening… tap mic to stop & send" : "Tap the mic button to speak")}
+                                            {micStatus || (isListening ? "Listening… tap mic to stop" : "Tap the mic button to speak")}
                                         </p>
                                     </div>
                                 ) : (
