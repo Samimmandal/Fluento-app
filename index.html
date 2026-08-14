@@ -66,14 +66,15 @@
 
             const messagesEndRef = useRef(null);
             const recognitionRef = useRef(null);
-            const transcriptRef = useRef("");
             const interimRef = useRef("");
-            // Map of resultIndex -> finalized transcript chunk. Rebuilding the
-            // full transcript from this map (instead of appending deltas) avoids
-            // the "can can I can I talk" duplication bug.
-            const finalTranscriptsRef = useRef({});
+            // Text finalized by *previous* recognition bursts within the current
+            // tap-to-talk session (see the continuous=false workaround below).
+            const committedTranscriptRef = useRef("");
+            // Final text produced by the *current* (not-yet-ended) burst.
+            const sessionFinalRef = useRef("");
             const isManualStopRef = useRef(false);
             const isRestartingRef = useRef(false);
+            const permissionDeniedRef = useRef(false);
 
             // --- Refs that mirror state, so callbacks captured once by the
             // SpeechRecognition event handlers (set up in a mount-only effect)
@@ -107,7 +108,21 @@
                 messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
             }, [messages, isTyping]);
 
-            // Speech Recognition setup – continuous mode with manual control
+            // Speech Recognition setup.
+            //
+            // IMPORTANT: continuous=true is unreliable on many Android/mobile
+            // Chrome builds — the native recognizer can re-finalize a *growing*
+            // version of the same phrase under new result indices ("can" ->
+            // "can you" -> "can you hear" -> "can you hear me" -> "can you hear
+            // me" again), which produces duplicated text no matter how the
+            // results are merged on the JS side. Desktop Chrome doesn't have
+            // this bug, which is why it only shows up on phones.
+            //
+            // The reliable workaround is to run recognition in short,
+            // non-continuous "bursts": each burst yields exactly one clean
+            // final phrase, and we immediately restart a new burst in the
+            // background so listening still feels continuous to the user. The
+            // finished bursts are stitched together in committedTranscriptRef.
             useEffect(() => {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 if (!SpeechRecognition) {
@@ -116,59 +131,72 @@
                 }
 
                 const recognition = new SpeechRecognition();
-                recognition.continuous = true;
+                recognition.continuous = false;
                 recognition.interimResults = true;
                 recognition.lang = "en-US";
                 recognition.maxAlternatives = 1;
 
+                const updateDisplay = () => {
+                    const display = (
+                        committedTranscriptRef.current + " " +
+                        sessionFinalRef.current + " " +
+                        interimRef.current
+                    ).replace(/\s+/g, " ").trim();
+                    setInputText(display);
+                };
+
                 recognition.onstart = () => {
                     setIsListening(true);
                     setMicStatus("Listening… tap mic to stop & send");
-                    isManualStopRef.current = false;
                     isRestartingRef.current = false;
                 };
 
                 recognition.onresult = (event) => {
                     let interim = "";
+                    let finalChunk = "";
                     for (let i = event.resultIndex; i < event.results.length; i++) {
                         const result = event.results[i];
                         if (result.isFinal) {
-                            // Store by index so re-delivered/duplicate events
-                            // simply overwrite the same slot instead of piling up.
-                            finalTranscriptsRef.current[i] = result[0].transcript.trim();
+                            finalChunk += result[0].transcript;
                         } else {
                             interim += result[0].transcript;
                         }
                     }
-
-                    const finalText = Object.keys(finalTranscriptsRef.current)
-                        .sort((a, b) => a - b)
-                        .map((k) => finalTranscriptsRef.current[k])
-                        .join(" ")
-                        .trim();
-
-                    transcriptRef.current = finalText;
+                    if (finalChunk) {
+                        sessionFinalRef.current = finalChunk.trim();
+                    }
                     interimRef.current = interim;
-                    const display = (finalText + (interim ? " " + interim : "")).trim();
-                    setInputText(display);
+                    updateDisplay();
                 };
 
                 recognition.onerror = (event) => {
                     console.error("Speech error:", event.error);
-                    setIsListening(false);
                     if (event.error === "not-allowed") {
+                        permissionDeniedRef.current = true;
                         setMicStatus("Microphone permission denied");
                     } else if (event.error === "no-speech") {
-                        setMicStatus("No speech detected");
-                    } else {
+                        // Expected often with short bursts; onend will restart.
+                        setMicStatus("Listening… tap mic to stop & send");
+                    } else if (event.error !== "aborted") {
                         setMicStatus("Error: " + event.error);
                     }
                 };
 
                 recognition.onend = () => {
                     setIsListening(false);
+
+                    // Fold whatever this burst finalized into the running total.
+                    if (sessionFinalRef.current) {
+                        committedTranscriptRef.current = (
+                            committedTranscriptRef.current + " " + sessionFinalRef.current
+                        ).replace(/\s+/g, " ").trim();
+                        sessionFinalRef.current = "";
+                    }
+                    interimRef.current = "";
+
                     if (isManualStopRef.current) {
-                        const textToSend = transcriptRef.current.trim();
+                        isManualStopRef.current = false;
+                        const textToSend = committedTranscriptRef.current.trim();
                         if (textToSend) {
                             setMicStatus("Sending…");
                             setTimeout(() => {
@@ -177,23 +205,22 @@
                         } else {
                             setMicStatus("No speech to send");
                         }
-                        isManualStopRef.current = false;
-                    } else {
-                        // Unexpected end – restart if not already restarting
-                        if (!isRestartingRef.current) {
-                            isRestartingRef.current = true;
-                            setMicStatus("Reconnecting…");
-                            setTimeout(() => {
-                                try {
-                                    recognitionRef.current.start();
-                                } catch (e) {
-                                    setMicStatus("Could not restart microphone");
-                                }
-                                isRestartingRef.current = false;
-                            }, 400);
-                        } else {
-                            setMicStatus("Listening stopped");
-                        }
+                        return;
+                    }
+
+                    // Not a manual stop, and mic is still supposed to be
+                    // listening: start the next burst so it feels continuous.
+                    if (permissionDeniedRef.current) return;
+                    if (!isRestartingRef.current) {
+                        isRestartingRef.current = true;
+                        setTimeout(() => {
+                            try {
+                                recognitionRef.current.start();
+                            } catch (e) {
+                                setMicStatus("Could not restart microphone");
+                            }
+                            isRestartingRef.current = false;
+                        }, 150);
                     }
                 };
 
@@ -249,9 +276,10 @@
                     } catch (e) { /* ignore */ }
                 } else {
                     // Start listening – reset transcript state
-                    transcriptRef.current = "";
+                    committedTranscriptRef.current = "";
+                    sessionFinalRef.current = "";
                     interimRef.current = "";
-                    finalTranscriptsRef.current = {};
+                    permissionDeniedRef.current = false;
                     setInputText("");
                     isManualStopRef.current = false;
                     isRestartingRef.current = false;
@@ -336,9 +364,9 @@
                 // Clear mic state
                 setInputText("");
                 setMicStatus("");
-                transcriptRef.current = "";
+                committedTranscriptRef.current = "";
+                sessionFinalRef.current = "";
                 interimRef.current = "";
-                finalTranscriptsRef.current = {};
 
                 setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
                 setIsTyping(true);
