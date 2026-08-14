@@ -1,134 +1,184 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fluento - English Speaking Partner</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fluento - English Speaking Partner</title>
+    <script src="https://cdn.tailwindcss.com">
+    </script>
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js">
+    </script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js">
+    </script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+    </script>
 </head>
 <body class="bg-black">
-  <div id="root"></div>
+    <div id="root"></div>
 
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-    const SUPABASE_URL = "https://beqmmczwetvbxieentrz.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_KZ2ONlqKUuDe6bYxNggowQ_kc-3kBDL";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const WORKER_URL = "https://morning-bonus-5828.imsamimmandal601.workers.dev";
+        const SUPABASE_URL = "https://beqmmczwetvbxieentrz.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_KZ2ONlqKUuDe6bYxNggowQ_kc-3kBDL";
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const WORKER_URL = "https://morning-bonus-5828.imsamimmandal601.workers.dev";
 
-    const MicIcon = ({ size = 28, className = "" }) => (
-      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-        <line x1="12" x2="12" y1="19" y2="22"/>
-      </svg>
+        const MicIcon = ({ size = 28, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" className={className}>
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" x2="12" y1="19" y2="22" />
+        </svg>
     );
 
-    const GoogleIcon = () => (
-      <svg width="20" height="20" viewBox="0 0 24 24">
-        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-      </svg>
-    );
+    const SendIcon = ({ size = 28, className = "" }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="2" className={className}>
+        <path d="M22 2L11 13" />
+        <path d="M22 2L15 22l-4-9-9-4 20-7z" />
+    </svg>
+);
 
-    function App() {
-      const [session, setSession] = useState(null);
-      const [loading, setLoading] = useState(true);
-      const [authError, setAuthError] = useState("");
-      const [authLoading, setAuthLoading] = useState(false);
+const GoogleIcon = () => (
+    <svg width="20" height="20" viewBox="0 0 24 24">
+        <path fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+        <path fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+        <path fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+        <path fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+    </svg>
+);
 
-      const [level, setLevel] = useState(null);
-      const [mode, setMode] = useState(null);
-      const [messages, setMessages] = useState([]);
-      const [inputText, setInputText] = useState("");
-      const [isTyping, setIsTyping] = useState(false);
-      const [isListening, setIsListening] = useState(false);
-      const [micStatus, setMicStatus] = useState("");
-      const [showLevelModal, setShowLevelModal] = useState(false);
-      const [showModeModal, setShowModeModal] = useState(false);
+function App() {
+    const [session, setSession] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [authError, setAuthError] = useState("");
+    const [authLoading, setAuthLoading] = useState(false);
 
-      const messagesEndRef = useRef(null);
-      const recognitionRef = useRef(null);
-      const finalTextRef = useRef("");
+    const [level, setLevel] = useState(null);
+    const [mode, setMode] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [inputText, setInputText] = useState("");
+    const [isTyping, setIsTyping] = useState(false);
+    const [isListening, setIsListening] = useState(false);
+    const [micStatus, setMicStatus] = useState("");
+    const [showLevelModal, setShowLevelModal] = useState(false);
+    const [showModeModal, setShowModeModal] = useState(false);
 
-      useEffect(() => {
+    const messagesEndRef = useRef(null);
+    const recognitionRef = useRef(null);
+    const finalTextRef = useRef("");
+    const transcriptRef = useRef("");
+    const textSentRef = useRef(false);
+    const isManualStopRef = useRef(false);
+
+    useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
-          setSession(session);
-          setLoading(false);
-          if (session) setShowLevelModal(true);
+            setSession(session);
+            setLoading(false);
+            if (session) setShowLevelModal(true);
         });
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-          setSession(session);
-          if (session) setShowLevelModal(true);
+            setSession(session);
+            if (session) setShowLevelModal(true);
         });
 
         return () => subscription.unsubscribe();
-      }, []);
+    }, []);
 
-      useEffect(() => {
+    useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, [messages, isTyping]);
+    }, [messages, isTyping]);
 
-      // More stable Speech Recognition (Toggle mode)
-      useEffect(() => {
+    // Speech Recognition setup
+    useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-          setMicStatus("Speech recognition not supported. Please use Chrome.");
-          return;
+            setMicStatus("Speech recognition not supported. Please use Chrome.");
+            return;
         }
 
         const recognition = new SpeechRecognition();
-        recognition.continuous = false;       // More stable
+        recognition.continuous = false;
         recognition.interimResults = true;
         recognition.lang = "en-US";
         recognition.maxAlternatives = 1;
 
         recognition.onstart = () => {
-          setIsListening(true);
-          setMicStatus("Listening... Tap mic again when finished");
-          finalTextRef.current = "";
+            setIsListening(true);
+            setMicStatus("Listening... tap mic to stop & send");
+            finalTextRef.current = "";
+            transcriptRef.current = "";
+            textSentRef.current = false;
+            isManualStopRef.current = false;
         };
 
         recognition.onresult = (event) => {
-          let transcript = "";
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            transcript += event.results[i][0].transcript;
-          }
-          setInputText(transcript.trim());
-          if (event.results[event.results.length - 1].isFinal) {
-            finalTextRef.current = transcript.trim();
-          }
+            let transcript = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                transcript += event.results[i][0].transcript;
+            }
+            const trimmed = transcript.trim();
+            transcriptRef.current = trimmed;
+            setInputText(trimmed);
+
+            if (event.results[event.results.length - 1].isFinal) {
+                finalTextRef.current = trimmed;
+            }
         };
 
         recognition.onerror = (event) => {
-          console.error("Speech error:", event.error);
-          setIsListening(false);
-          if (event.error === "not-allowed") {
-            setMicStatus("Microphone permission denied");
-          } else if (event.error === "no-speech") {
-            setMicStatus("No speech detected");
-          } else {
-            setMicStatus("Error: " + event.error);
-          }
+            console.error("Speech error:", event.error);
+            setIsListening(false);
+            if (event.error === "not-allowed") {
+                setMicStatus("Microphone permission denied");
+            } else if (event.error === "no-speech") {
+                setMicStatus("No speech detected — tap mic to try again");
+            } else {
+                setMicStatus("Error: " + event.error);
+            }
         };
 
         recognition.onend = () => {
-          setIsListening(false);
+            setIsListening(false);
+
+            // If the user manually stopped, the text is already sent in toggleListening.
+            // If it's an automatic stop, send the text now.
+            if (!isManualStopRef.current && !textSentRef.current) {
+                const textToSend = (finalTextRef.current || transcriptRef.current || inputText || "").trim();
+                if (textToSend) {
+                    textSentRef.current = true;
+                    setMicStatus("Sending...");
+                    setTimeout(() => {
+                        sendMessage(textToSend);
+                    }, 150);
+                } else {
+                    setMicStatus("No speech detected — tap mic to try again");
+                }
+            } else if (isManualStopRef.current) {
+                // Manual stop: text is sent in toggleListening, just update status if needed
+                if (!textSentRef.current) {
+                    setMicStatus("No speech detected");
+                }
+            }
+
+            // Reset manual stop flag for next session
+            isManualStopRef.current = false;
         };
 
         recognitionRef.current = recognition;
-      }, []);
+    }, [inputText]);
 
-      // Prefer Daniel - Steady Broadcaster voice
-      const speakText = (text) => {
+    // Prefer Daniel voice
+    const speakText = (text) => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
 
@@ -137,82 +187,93 @@
         utterance.pitch = 1;
 
         const voices = window.speechSynthesis.getVoices();
-        let selectedVoice = voices.find(v => 
-          v.name.toLowerCase().includes("daniel") && 
-          (v.name.toLowerCase().includes("steady") || v.name.toLowerCase().includes("broadcaster"))
+        let selectedVoice = voices.find(v =>
+            v.name.toLowerCase().includes("daniel") &&
+            (v.name.toLowerCase().includes("steady") || v.name.toLowerCase().includes("broadcaster"))
         );
 
         if (!selectedVoice) {
-          selectedVoice = voices.find(v => v.name.toLowerCase().includes("daniel"));
+            selectedVoice = voices.find(v => v.name.toLowerCase().includes("daniel"));
         }
 
         if (selectedVoice) {
-          utterance.voice = selectedVoice;
+            utterance.voice = selectedVoice;
         }
 
         window.speechSynthesis.speak(utterance);
-      };
+    };
 
-      useEffect(() => {
+    useEffect(() => {
         if (window.speechSynthesis) {
-          window.speechSynthesis.getVoices();
-          window.speechSynthesis.onvoiceschanged = () => {
             window.speechSynthesis.getVoices();
-          };
+            window.speechSynthesis.onvoiceschanged = () => {
+                window.speechSynthesis.getVoices();
+            };
         }
-      }, []);
+    }, []);
 
-      const toggleListening = () => {
+    const toggleListening = () => {
         if (!recognitionRef.current) {
-          setMicStatus("Speech recognition not available");
-          return;
+            setMicStatus("Speech recognition not available");
+            return;
         }
 
         if (isListening) {
-          // Stop and send
-          try {
-            recognitionRef.current.stop();
-          } catch (e) {}
-          setIsListening(false);
+            // User is manually stopping — mark it so onend knows not to double-send
+            isManualStopRef.current = true;
 
-          const textToSend = (finalTextRef.current || inputText || "").trim();
-          if (textToSend) {
-            setMicStatus("Sending...");
-            setTimeout(() => sendMessage(textToSend), 200);
-          } else {
-            setMicStatus("No speech detected");
-          }
+            // Grab the current text before stopping
+            const textToSend = (finalTextRef.current || transcriptRef.current || inputText || "").trim();
+
+            // Stop recognition
+            try {
+                recognitionRef.current.stop();
+            } catch (e) { /* ignore */ }
+
+            // Send the text now (onend will see isManualStopRef=true and skip sending)
+            if (textToSend && !textSentRef.current) {
+                textSentRef.current = true;
+                setMicStatus("Sending...");
+                setTimeout(() => {
+                    sendMessage(textToSend);
+                }, 150);
+            } else if (!textToSend) {
+                setMicStatus("No speech detected");
+            }
         } else {
-          // Start listening
-          finalTextRef.current = "";
-          setInputText("");
-          setMicStatus("Listening... Tap mic again when finished");
-          try {
-            recognitionRef.current.start();
-          } catch (err) {
-            setMicStatus("Could not start microphone");
-          }
+            // Start listening
+            textSentRef.current = false;
+            isManualStopRef.current = false;
+            finalTextRef.current = "";
+            transcriptRef.current = "";
+            setInputText("");
+            setMicStatus("Listening... tap mic to stop & send");
+            try {
+                recognitionRef.current.start();
+            } catch (err) {
+                setMicStatus("Could not start microphone");
+            }
         }
-      };
+    };
 
-      const handleGoogleLogin = async () => {
+    const handleGoogleLogin = async () => {
         setAuthError("");
         setAuthLoading(true);
         try {
-          const { error } = await supabase.auth.signInWithOAuth({
-            provider: "google",
-            options: {
-              redirectTo: "https://samimmandal.github.io/Fluento-app/"
-            }
-          });
-          if (error) throw error;
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: "google",
+                options: {
+                    redirectTo: "https://samimmandal.github.io/Fluento-app/"
+                }
+            });
+            if (error) throw error;
         } catch (err) {
-          setAuthError(err.message);
-          setAuthLoading(false);
+            setAuthError(err.message);
+            setAuthLoading(false);
         }
-      };
+    };
 
-      const handleLogout = async () => {
+    const handleLogout = async () => {
         await supabase.auth.signOut();
         setSession(null);
         setMessages([]);
@@ -220,330 +281,368 @@
         setMode(null);
         setShowLevelModal(false);
         setShowModeModal(false);
-      };
+    };
 
-      const handleSelectLevel = (chosenLevel) => {
+    const handleSelectLevel = (chosenLevel) => {
         setLevel(chosenLevel);
         setShowLevelModal(false);
         setShowModeModal(true);
-      };
+    };
 
-      const handleSelectMode = (chosenMode) => {
+    const handleSelectMode = (chosenMode) => {
         setMode(chosenMode);
         setShowModeModal(false);
         setMessages([{
-          sender: "partner",
-          text: `Hey there! I'm your English speaking practice partner. You're in ${chosenMode === "voice" ? "Voice" : "Text"} mode at ${level} level. What's on your mind today?`,
-          correction: null
+            sender: "partner",
+            text: `Hey there! I'm your English speaking practice partner. You're in ${chosenMode === "voice" ? "Voice" : "Text"} mode at ${level} level. What's on your mind today?`,
+            correction: null
         }]);
-      };
+    };
 
-      const parseCorrection = (rawText) => {
+    const parseCorrection = (rawText) => {
         if (!rawText.includes("CORRECTION:")) return { text: rawText, correction: null };
         const parts = rawText.split("CORRECTION:");
         const mainText = parts[0].trim();
         const correctionPart = parts[1].trim();
         const match = correctionPart.match(/(.+?)\s*→\s*(.+?)(?:\s*\((.+)\))?$/);
         if (match) {
-          return {
-            text: mainText,
-            correction: {
-              original: match[1].trim(),
-              corrected: match[2].trim(),
-              tip: match[3] ? match[3].trim() : ""
-            }
-          };
+            return {
+                text: mainText,
+                correction: {
+                    original: match[1].trim(),
+                    corrected: match[2].trim(),
+                    tip: match[3] ? match[3].trim() : ""
+                }
+            };
         }
         return { text: rawText, correction: null };
-      };
+    };
 
-      const sendMessage = async (text) => {
+    const sendMessage = async (text) => {
         const trimmed = (text || "").trim();
         if (!trimmed || isTyping || !level || !session) return;
 
+        // Clear mic state
         setInputText("");
         setMicStatus("");
         finalTextRef.current = "";
+        transcriptRef.current = "";
+        textSentRef.current = false;
 
         setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
         setIsTyping(true);
 
         try {
-          const response = await fetch(WORKER_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: session.user.id,
-              message: trimmed,
-              level: level
-            })
-          });
+            const response = await fetch(WORKER_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userId: session.user.id,
+                    message: trimmed,
+                    level: level
+                })
+            });
 
-          const data = await response.json();
-          if (data.reply) {
-            const parsed = parseCorrection(data.reply);
-            setMessages(prev => [...prev, {
-              sender: "partner",
-              text: parsed.text,
-              correction: parsed.correction
-            }]);
+            const data = await response.json();
+            if (data.reply) {
+                const parsed = parseCorrection(data.reply);
+                setMessages(prev => [...prev, {
+                    sender: "partner",
+                    text: parsed.text,
+                    correction: parsed.correction
+                }]);
 
-            if (mode === "voice") {
-              speakText(parsed.text);
+                if (mode === "voice") {
+                    speakText(parsed.text);
+                }
+            } else {
+                setMessages(prev => [...prev, {
+                    sender: "partner",
+                    text: "Sorry, I had trouble understanding. Can you try again?",
+                    correction: null
+                }]);
             }
-          } else {
-            setMessages(prev => [...prev, {
-              sender: "partner",
-              text: "Sorry, I had trouble understanding. Can you try again?",
-              correction: null
-            }]);
-          }
         } catch (err) {
-          setMessages(prev => [...prev, {
-            sender: "partner",
-            text: "Connection problem. Please try again.",
-            correction: null
-          }]);
+            setMessages(prev => [...prev, {
+                sender: "partner",
+                text: "Connection problem. Please try again.",
+                correction: null
+            }]);
         }
         setIsTyping(false);
-      };
+    };
 
-      const handleSendMessage = (e) => {
+    const handleSendMessage = (e) => {
         if (e) e.preventDefault();
         sendMessage(inputText);
-      };
+    };
 
-      if (loading) {
+    const handleKeyDown = (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage(inputText);
+        }
+    };
+
+    if (loading) {
         return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
-      }
+    }
 
-      if (!session) {
+    if (!session) {
         return (
-          <div className="min-h-screen bg-black flex items-center justify-center p-4">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 w-full max-w-md text-center">
-              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white">
-                <MicIcon />
-              </div>
-              <h1 className="text-2xl font-semibold text-white mb-1">Fluento</h1>
-              <p className="text-neutral-400 text-sm mb-8">English Speaking Partner</p>
-              {authError && (
-                <div className="text-red-400 text-sm bg-red-950/30 border border-red-900 rounded-xl p-3 mb-4 text-left">
-                  {authError}
+            <div className="min-h-screen bg-black flex items-center justify-center p-4">
+                <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 w-full max-w-md text-center">
+                    <div
+                    className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white">
+                    <MicIcon />
                 </div>
-              )}
-              <button
+                <h1 className="text-2xl font-semibold text-white mb-1">Fluento</h1>
+                <p className="text-neutral-400 text-sm mb-8">English Speaking Partner</p>
+                {authError && (
+                    <div className="text-red-400 text-sm bg-red-950/30 border border-red-900 rounded-xl p-3 mb-4 text-left">
+                        {authError}
+                    </div>
+                )}
+                <button
                 onClick={handleGoogleLogin}
                 disabled={authLoading}
                 className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-800 font-medium py-3.5 rounded-xl transition disabled:opacity-50"
-              >
+                >
                 <GoogleIcon />
                 {authLoading ? "Redirecting..." : "Continue with Google"}
-              </button>
-            </div>
-          </div>
-        );
-      }
+            </button>
+        </div>
+    </div>
+);
+}
 
-      if (showLevelModal) {
-        return (
-          <div className="min-h-screen bg-black flex items-center justify-center p-4">
+if (showLevelModal) {
+    return (
+        <div className="min-h-screen bg-black flex items-center justify-center p-4">
             <div className="bg-black border border-neutral-800 rounded-3xl max-w-md w-full p-8 text-center">
-              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white">
+                <div
+                className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white">
                 <MicIcon />
-              </div>
-              <h2 className="text-2xl font-semibold mb-2 text-white">Choose Your Level</h2>
-              <p className="text-neutral-400 text-sm mb-8">Select your current English level</p>
-              <div className="space-y-3">
+            </div>
+            <h2 className="text-2xl font-semibold mb-2 text-white">Choose Your Level</h2>
+            <p className="text-neutral-400 text-sm mb-8">Select your current English level</p>
+            <div className="space-y-3">
                 {[
-                  { title: "Beginner", subtitle: "A1-A2 · Gentle pace", level: "Beginner" },
-                  { title: "Intermediate", subtitle: "B1-B2 · Natural flow", level: "Intermediate" },
-                  { title: "Advanced", subtitle: "C1-C2 · Idioms & nuance", level: "Advanced" },
+                    { title: "Beginner", subtitle: "A1-A2 · Gentle pace", level: "Beginner" },
+                    { title: "Intermediate", subtitle: "B1-B2 · Natural flow", level: "Intermediate" },
+                    { title: "Advanced", subtitle: "C1-C2 · Idioms & nuance", level: "Advanced" },
                 ].map(item => (
-                  <button key={item.level} onClick={() => handleSelectLevel(item.level)}
+                    <button key={item.level} onClick={() => handleSelectLevel(item.level)}
                     className="w-full py-4 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl flex justify-between items-center text-left text-white">
                     <div>
-                      <div className="font-medium">{item.title}</div>
-                      <div className="text-xs text-neutral-400">{item.subtitle}</div>
+                        <div className="font-medium">{item.title}</div>
+                        <div className="text-xs text-neutral-400">{item.subtitle}</div>
                     </div>
                     <span>→</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      }
+                </button>
+            ))}
+        </div>
+    </div>
+</div>
+);
+}
 
-      if (showModeModal) {
-        return (
-          <div className="min-h-screen bg-black flex items-center justify-center p-4">
+if (showModeModal) {
+    return (
+        <div className="min-h-screen bg-black flex items-center justify-center p-4">
             <div className="bg-black border border-neutral-800 rounded-3xl max-w-md w-full p-8 text-center">
-              <h2 className="text-2xl font-semibold mb-2 text-white">How do you want to practice?</h2>
-              <p className="text-neutral-400 text-sm mb-8">Choose your preferred way</p>
-              <div className="space-y-4">
-                <button
-                  onClick={() => handleSelectMode("voice")}
-                  className="w-full py-5 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white transition"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-rose-500/20 rounded-xl flex items-center justify-center text-rose-400">
-                      <MicIcon size={24} />
+                <h2 className="text-2xl font-semibold mb-2 text-white">How do you want to practice?</h2>
+                <p className="text-neutral-400 text-sm mb-8">Choose your preferred way</p>
+                <div className="space-y-4">
+                    <button
+                    onClick={() => handleSelectMode("voice")}
+                    className="w-full py-5 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white transition"
+                    >
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-rose-500/20 rounded-xl flex items-center justify-center text-rose-400">
+                            <MicIcon size={24} />
+                        </div>
+                        <div>
+                            <div className="font-medium text-lg">Speak with AI</div>
+                            <div className="text-sm text-neutral-400">Tap mic to speak • AI replies with voice</div>
+                        </div>
                     </div>
-                    <div>
-                      <div className="font-medium text-lg">Speak with AI</div>
-                      <div className="text-sm text-neutral-400">Tap mic to speak • AI replies with voice</div>
-                    </div>
-                  </div>
                 </button>
 
                 <button
-                  onClick={() => handleSelectMode("text")}
-                  className="w-full py-5 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white transition"
+                onClick={() => handleSelectMode("text")}
+                className="w-full py-5 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white transition"
                 >
-                  <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 text-xl">
-                      💬
+                        💬
                     </div>
                     <div>
-                      <div className="font-medium text-lg">Chat with Samim</div>
-                      <div className="text-sm text-neutral-400">Type messages • Get text replies</div>
+                        <div className="font-medium text-lg">Chat with Samim</div>
+                        <div className="text-sm text-neutral-400">Type messages • Get text replies</div>
                     </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      return (
-        <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
-          <div className="w-64 border-r border-neutral-800 hidden md:flex flex-col justify-between p-6">
-            <div>
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 flex items-center justify-center">
-                  <MicIcon size={20} />
                 </div>
-                <span className="font-semibold">Fluento</span>
-              </div>
-              <div className="text-xs text-neutral-500 mb-1">Logged in as</div>
-              <div className="text-sm text-neutral-300 truncate mb-6">{session.user.email}</div>
+            </button>
+        </div>
+    </div>
+</div>
+);
+}
+
+return (
+    <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
+        {/* Sidebar */}
+        <div className="w-64 border-r border-neutral-800 hidden md:flex flex-col justify-between p-6">
+            <div>
+                <div className="flex items-center gap-3 mb-8">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 flex items-center justify-center">
+                        <MicIcon size={20} />
+                    </div>
+                    <span className="font-semibold">Fluento</span>
+                </div>
+                <div className="text-xs text-neutral-500 mb-1">Logged in as</div>
+                <div className="text-sm text-neutral-300 truncate mb-6">{session.user.email}</div>
             </div>
             <div className="space-y-3">
-              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
-                <div className="text-xs text-neutral-500">Level</div>
-                <div className="text-sm text-rose-400">{level}</div>
-              </div>
-              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
-                <div className="text-xs text-neutral-500">Mode</div>
-                <div className="text-sm text-rose-400">{mode === "voice" ? "Voice" : "Text"}</div>
-              </div>
-              <button onClick={() => setShowModeModal(true)} className="w-full text-sm bg-neutral-800 hover:bg-neutral-700 py-2 rounded-xl">
-                Change Mode
-              </button>
-              <button onClick={handleLogout} className="w-full text-sm text-red-400 hover:bg-red-950/30 py-2 rounded-xl">
-                Logout
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 flex flex-col relative">
-            <div className="h-16 border-b border-neutral-800 flex items-center justify-between px-6">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></div>
-                <span className="text-sm">Live Practice Session</span>
-              </div>
-              <span className="text-xs px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800">
-                {level} · {mode === "voice" ? "Voice" : "Text"}
-              </span>
-            </div>
-
-            <div className="flex-1 overflow-y-auto pt-6 pb-40 px-4 md:px-8 space-y-6 max-w-3xl mx-auto w-full">
-              {messages.map((msg, idx) => (
-                <div key={idx} className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}>
-                  <div className={`max-w-xl rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                    msg.sender === "user" 
-                      ? "bg-rose-500 text-white rounded-br-sm" 
-                      : "bg-neutral-900 border border-neutral-800 rounded-bl-sm"
-                  }`}>
-                    {msg.text}
-                  </div>
-
-                  {msg.correction && (
-                    <div className="mt-3 max-w-xl w-full bg-neutral-900 border border-rose-900/40 rounded-2xl p-4 text-sm">
-                      <div className="font-semibold text-rose-400 flex items-center gap-2 mb-2">
-                        🔧 Gentle Correction
-                      </div>
-                      <div className="text-neutral-500 line-through mb-1">"{msg.correction.original}"</div>
-                      <div className="text-emerald-400 font-medium mb-2">→ "{msg.correction.corrected}"</div>
-                      {msg.correction.tip && (
-                        <div className="text-neutral-300 text-xs bg-black/40 p-2.5 rounded-xl border border-neutral-800 flex gap-2">
-                          <span>💡</span>
-                          <span>{msg.correction.tip}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
+                    <div className="text-xs text-neutral-500">Level</div>
+                    <div className="text-sm text-rose-400">{level}</div>
                 </div>
-              ))}
-
-              {isTyping && (
-                <div className="flex items-center gap-2 text-neutral-500 text-sm">
-                  <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce" style={{animationDelay:"0.2s"}}></div>
-                  <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce" style={{animationDelay:"0.4s"}}></div>
-                  <span className="text-xs">Partner is speaking...</span>
+                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
+                    <div className="text-xs text-neutral-500">Mode</div>
+                    <div className="text-sm text-rose-400">{mode === "voice" ? "Voice" : "Text"}</div>
                 </div>
-              )}
-              <div ref={messagesEndRef} />
+                <button onClick={() => setShowModeModal(true)} className="w-full text-sm bg-neutral-800 hover:bg-neutral-700 py-2 rounded-xl">
+                    Change Mode
+                </button>
+                <button onClick={handleLogout} className="w-full text-sm text-red-400 hover:bg-red-950/30 py-2 rounded-xl">
+                    Logout
+                </button>
             </div>
-
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-black border-t border-neutral-800">
-              <div className="max-w-3xl mx-auto">
-                {mode === "voice" ? (
-                  <div className="flex flex-col items-center gap-3">
-                    {inputText && (
-                      <div className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2 text-sm text-neutral-300 text-center">
-                        {inputText}
-                      </div>
-                    )}
-
-                    <button
-                      onClick={toggleListening}
-                      className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
-                        isListening 
-                          ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50" 
-                          : "bg-neutral-800 hover:bg-neutral-700"
-                      }`}
-                    >
-                      <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
-                    </button>
-
-                    <p className="text-xs text-neutral-400 text-center">
-                      {micStatus || (isListening ? "Listening... Tap mic again to send" : "Tap the mic button to speak")}
-                    </p>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSendMessage} className="flex gap-3 items-center">
-                    <input
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      placeholder="Type your message..."
-                      className="flex-1 bg-neutral-900 border border-neutral-700 rounded-2xl px-5 py-3 text-white focus:outline-none focus:border-rose-500"
-                    />
-                    <button type="submit" className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-2xl font-medium">
-                      Send
-                    </button>
-                  </form>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
-      );
-    }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-  </script>
+        {/* Main chat area */}
+        <div className="flex-1 flex flex-col relative">
+            {/* Header */}
+            <div className="h-16 border-b border-neutral-800 flex items-center justify-between px-6">
+                <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></div>
+                    <span className="text-sm">Live Practice Session</span>
+                </div>
+                <span className="text-xs px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800">
+                    {level} · {mode === "voice" ? "Voice" : "Text"}
+                </span>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto pt-6 pb-40 px-4 md:px-8 space-y-6 max-w-3xl mx-auto w-full">
+                {messages.map((msg, idx) => (
+                    <div key={idx} className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}>
+                        <div className={`max-w-xl rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                            msg.sender === "user"
+                            ? "bg-rose-500 text-white rounded-br-sm"
+                            : "bg-neutral-900 border border-neutral-800 rounded-bl-sm"
+                        }`}>
+                        {msg.text}
+                    </div>
+
+                    {msg.correction && (
+                        <div className="mt-3 max-w-xl w-full bg-neutral-900 border border-rose-900/40 rounded-2xl p-4 text-sm">
+                            <div className="font-semibold text-rose-400 flex items-center gap-2 mb-2">
+                                🔧 Gentle Correction
+                            </div>
+                            <div className="text-neutral-500 line-through mb-1">"{msg.correction.original}"</div>
+                            <div className="text-emerald-400 font-medium mb-2">→ "{msg.correction.corrected}"</div>
+                            {msg.correction.tip && (
+                                <div className="text-neutral-300 text-xs bg-black/40 p-2.5 rounded-xl border border-neutral-800 flex gap-2">
+                                    <span>💡</span>
+                                    <span>{msg.correction.tip}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            ))}
+
+            {isTyping && (
+                <div className="flex items-center gap-2 text-neutral-500 text-sm">
+                    <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}>
+                    </div>
+                    <div className="w-2 h-2 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}>
+                    </div>
+                    <span className="text-xs">Partner is speaking...</span>
+                </div>
+            )}
+            <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input area */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-black border-t border-neutral-800">
+            <div className="max-w-3xl mx-auto">
+                {mode === "voice" ? (
+                    <div className="flex flex-col items-center gap-3">
+                        {inputText && (
+                            <div className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2.5 text-sm text-neutral-200 text-center">
+                                {inputText}
+                            </div>
+                        )}
+
+                        <div className="flex items-center gap-4">
+                            <button
+                            onClick={toggleListening}
+                            className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                isListening
+                                ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50"
+                                : inputText
+                                ? "bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/30"
+                                : "bg-neutral-800 hover:bg-neutral-700"
+                            }`}
+                            >
+                            {inputText && !isListening ? (
+                                <SendIcon size={30} className="text-white" />
+                            ) : (
+                                <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
+                            )}
+                        </button>
+
+                        {inputText && !isListening && (
+                            <button
+                            onClick={() => sendMessage(inputText)}
+                            className="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 rounded-xl text-sm font-medium transition"
+                            >
+                            Send
+                        </button>
+                    )}
+                </div>
+
+                <p className="text-xs text-neutral-400 text-center min-h-[20px]">
+                    {micStatus || (isListening ? "Listening... tap mic to stop & send" : inputText ? "Tap send or mic to send" :
+                        "Tap the mic button to speak")}
+                </p>
+            </div>
+        ) : (
+            <form onSubmit={handleSendMessage} className="flex gap-3 items-center">
+                <input
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type your message..."
+                className="flex-1 bg-neutral-900 border border-neutral-700 rounded-2xl px-5 py-3 text-white focus:outline-none focus:border-rose-500"
+                />
+                <button type="submit" className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-2xl font-medium">
+                    Send
+                </button>
+            </form>
+        )}
+    </div>
+</div>
+</div>
+</div>
+);
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
 </body>
 </html>
