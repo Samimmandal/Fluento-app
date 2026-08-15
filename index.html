@@ -152,16 +152,67 @@
             useEffect(() => { modeRef.current = mode; }, [mode]);
             useEffect(() => { isTypingRef.current = isTyping; }, [isTyping]);
 
+            // Loads this user's saved level/mode and past conversation from
+            // Supabase, so returning users resume instead of starting over.
+            const loadUserData = async (sess) => {
+                if (!sess) return;
+                try {
+                    const [{ data: progress, error: progressError }, { data: history, error: historyError }] = await Promise.all([
+                        supabase
+                            .from("user_progress")
+                            .select("level, mode")
+                            .eq("user_id", sess.user.id)
+                            .maybeSingle(),
+                        supabase
+                            .from("chat_messages")
+                            .select("sender, text, correction, created_at")
+                            .eq("user_id", sess.user.id)
+                            .order("created_at", { ascending: true })
+                            .limit(200)
+                    ]);
+
+                    if (progressError) console.error("Load progress error:", progressError);
+                    if (historyError) console.error("Load history error:", historyError);
+
+                    if (history && history.length > 0) {
+                        setMessages(history.map(m => ({
+                            sender: m.sender,
+                            text: m.text,
+                            correction: m.correction || null
+                        })));
+                    }
+
+                    if (progress && progress.level) {
+                        setLevel(progress.level);
+                        levelRef.current = progress.level;
+                        if (progress.mode) {
+                            setMode(progress.mode);
+                            modeRef.current = progress.mode;
+                            setShowLevelModal(false);
+                            setShowModeModal(false);
+                        } else {
+                            setShowLevelModal(false);
+                            setShowModeModal(true);
+                        }
+                    } else {
+                        setShowLevelModal(true);
+                    }
+                } catch (err) {
+                    console.error("loadUserData failed:", err);
+                    setShowLevelModal(true);
+                }
+            };
+
             useEffect(() => {
                 supabase.auth.getSession().then(({ data: { session } }) => {
                     setSession(session);
                     setLoading(false);
-                    if (session) setShowLevelModal(true);
+                    if (session) loadUserData(session);
                 });
 
                 const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
                     setSession(session);
-                    if (session) setShowLevelModal(true);
+                    if (session) loadUserData(session);
                 });
 
                 return () => subscription.unsubscribe();
@@ -450,13 +501,22 @@
                 setShowModeModal(false);
             };
 
-            const handleSelectLevel = (chosenLevel) => {
+            const handleSelectLevel = async (chosenLevel) => {
                 setLevel(chosenLevel);
+                levelRef.current = chosenLevel;
                 setShowLevelModal(false);
                 setShowModeModal(true);
+                if (sessionRef.current) {
+                    const { error } = await supabase.from("user_progress").upsert({
+                        user_id: sessionRef.current.user.id,
+                        level: chosenLevel,
+                        updated_at: new Date().toISOString()
+                    });
+                    if (error) console.error("Save level error:", error);
+                }
             };
 
-            const handleSelectMode = (chosenMode) => {
+            const handleSelectMode = async (chosenMode) => {
                 if (recognitionRef.current && isListening) {
                     isManualStopRef.current = false;
                     permissionDeniedRef.current = true;
@@ -469,20 +529,47 @@
                 setIsSpeaking(false);
                 if (replyTimerRef.current) clearTimeout(replyTimerRef.current);
                 setMode(chosenMode);
+                modeRef.current = chosenMode;
                 setShowModeModal(false);
-                if (chosenMode === "voice") {
-                    const welcome = `Hey there! I'm your English speaking practice partner. You're in Voice mode at ${level} level. What's on your mind today?`;
-                    setMessages([{ sender: "partner", text: welcome, correction: null }]);
-                    setLastReply(welcome);
-                    setShowReply(true);
-                    speakText(welcome);
-                } else {
-                    setMessages([{
-                        sender: "partner",
-                        text: `Hey there! I'm your English speaking practice partner. You're in Text mode at ${level} level. What's on your mind today?`,
-                        correction: null
-                    }]);
+
+                if (sessionRef.current) {
+                    const { error } = await supabase.from("user_progress").upsert({
+                        user_id: sessionRef.current.user.id,
+                        level: levelRef.current,
+                        mode: chosenMode,
+                        updated_at: new Date().toISOString()
+                    });
+                    if (error) console.error("Save mode error:", error);
                 }
+
+                // Returning users with existing history get a short "welcome
+                // back" line appended instead of having their history wiped.
+                setMessages(prev => {
+                    if (prev.length > 0) {
+                        const welcomeBack = {
+                            sender: "partner",
+                            text: `Welcome back! Let's continue in ${chosenMode === "voice" ? "Voice" : "Text"} mode at ${level} level.`,
+                            correction: null
+                        };
+                        if (chosenMode === "voice") {
+                            setLastReply(welcomeBack.text);
+                            setShowReply(true);
+                            speakText(welcomeBack.text);
+                        }
+                        return [...prev, welcomeBack];
+                    }
+                    const welcome = {
+                        sender: "partner",
+                        text: `Hey there! I'm your English speaking practice partner. You're in ${chosenMode === "voice" ? "Voice" : "Text"} mode at ${level} level. What's on your mind today?`,
+                        correction: null
+                    };
+                    if (chosenMode === "voice") {
+                        setLastReply(welcome.text);
+                        setShowReply(true);
+                        speakText(welcome.text);
+                    }
+                    return [welcome];
+                });
             };
 
             const parseCorrection = (rawText) => {
@@ -504,6 +591,22 @@
                 return { text: rawText, correction: null };
             };
 
+            // Fire-and-forget save to Supabase; logs but doesn't block the UI
+            // or interrupt the conversation if it fails.
+            const saveMessage = (sender, text, correction) => {
+                if (!sessionRef.current) return;
+                supabase.from("chat_messages").insert({
+                    user_id: sessionRef.current.user.id,
+                    sender,
+                    text,
+                    correction: correction || null,
+                    mode: modeRef.current,
+                    level: levelRef.current
+                }).then(({ error }) => {
+                    if (error) console.error("Save message error:", error);
+                });
+            };
+
             const sendMessage = async (text) => {
                 const trimmed = (text || "").trim();
                 if (!trimmed || isTypingRef.current || !levelRef.current || !sessionRef.current) return;
@@ -515,7 +618,16 @@
                 interimRef.current = "";
                 setShowReply(false);
 
+                // Last few turns of real conversation, sent as context so the
+                // AI *can* use prior conversation if the Worker forwards this
+                // history to whatever model it calls.
+                const recentHistory = messages
+                    .filter(m => m.text)
+                    .slice(-10)
+                    .map(m => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text }));
+
                 setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
+                saveMessage("user", trimmed, null);
                 setIsTyping(true);
                 isTypingRef.current = true;
 
@@ -533,7 +645,8 @@
                         body: JSON.stringify({
                             userId: sessionRef.current.user.id,
                             message: trimmed,
-                            level: levelRef.current
+                            level: levelRef.current,
+                            history: recentHistory
                         }),
                         signal: controller.signal
                     });
@@ -547,6 +660,7 @@
                             text: parsed.text,
                             correction: parsed.correction
                         }]);
+                        saveMessage("partner", parsed.text, parsed.correction);
 
                         if (modeRef.current === "voice") {
                             setLastReply(parsed.text);
