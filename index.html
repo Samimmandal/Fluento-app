@@ -20,9 +20,9 @@
     const SUPABASE_URL = "https://beqmmczwetvbxieentrz.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_KZ2ONlqKUuDe6bYxNggowQ_kc-3kBDL";
     const RAZORPAY_KEY_ID = "rzp_test_TQ1hiiz3p8aR70";
+    const WORKER_URL = "https://morning-bonus-5828.imsamimmandal601.workers.dev";
 
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const WORKER_URL = "https://morning-bonus-5828.imsamimmandal601.workers.dev";
 
     const MicIcon = ({ size = 28, className = "" }) => (
       <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
@@ -56,6 +56,13 @@
       const [showLevelModal, setShowLevelModal] = useState(false);
       const [showModeModal, setShowModeModal] = useState(false);
 
+      // Voice
+      const [isListening, setIsListening] = useState(false);
+      const [micStatus, setMicStatus] = useState("");
+      const recognitionRef = useRef(null);
+      const finalTextRef = useRef("");
+
+      // Human Coach
       const [plans, setPlans] = useState([]);
       const [subscription, setSubscription] = useState(null);
       const [plansLoading, setPlansLoading] = useState(false);
@@ -68,11 +75,9 @@
           setSession(session);
           setLoading(false);
         });
-
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
           setSession(session);
         });
-
         return () => subscription.unsubscribe();
       }, []);
 
@@ -81,17 +86,79 @@
       }, [messages, isTyping]);
 
       useEffect(() => {
-        if (mainChoice === "human" && session) {
-          loadPlansAndSubscription();
-        }
+        if (mainChoice === "human" && session) loadPlansAndSubscription();
       }, [mainChoice, session]);
+
+      // Speech Recognition
+      useEffect(() => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = "en-US";
+
+        recognition.onstart = () => {
+          setIsListening(true);
+          setMicStatus("Listening... Tap mic again to send");
+          finalTextRef.current = "";
+        };
+
+        recognition.onresult = (event) => {
+          let transcript = "";
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+          }
+          setInputText(transcript.trim());
+          if (event.results[event.results.length - 1].isFinal) {
+            finalTextRef.current = transcript.trim();
+          }
+        };
+
+        recognition.onerror = (event) => {
+          setIsListening(false);
+          if (event.error === "not-allowed") setMicStatus("Microphone permission denied");
+          else if (event.error === "no-speech") setMicStatus("No speech detected");
+          else setMicStatus("Error: " + event.error);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+          const text = (finalTextRef.current || inputText || "").trim();
+          if (text) {
+            setMicStatus("Sending...");
+            setTimeout(() => sendMessage(text), 300);
+          } else {
+            setMicStatus("No speech detected. Tap mic to try again.");
+          }
+        };
+
+        recognitionRef.current = recognition;
+      }, []);
+
+      const toggleListening = () => {
+        if (!recognitionRef.current) {
+          setMicStatus("Speech recognition not supported. Use Chrome.");
+          return;
+        }
+        if (isListening) {
+          try { recognitionRef.current.stop(); } catch(e) {}
+        } else {
+          finalTextRef.current = "";
+          setInputText("");
+          setMicStatus("Listening...");
+          try { recognitionRef.current.start(); } catch(e) {
+            setMicStatus("Could not start microphone");
+          }
+        }
+      };
 
       const loadPlansAndSubscription = async () => {
         setPlansLoading(true);
         try {
           const { data: plansData } = await supabase.from("plans").select("*").order("price");
           setPlans(plansData || []);
-
           const { data: subData } = await supabase
             .from("subscriptions")
             .select("*, plans(*)")
@@ -101,11 +168,8 @@
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
-
           setSubscription(subData);
-        } catch (err) {
-          console.error(err);
-        }
+        } catch (err) { console.error(err); }
         setPlansLoading(false);
       };
 
@@ -134,27 +198,17 @@
         setSubscription(null);
       };
 
-      // Free Trial
       const startFreeTrial = async () => {
         if (!session) return;
-
-        const { data: existing } = await supabase
-          .from("subscriptions")
-          .select("id")
-          .eq("user_id", session.user.id)
-          .limit(1);
-
+        const { data: existing } = await supabase.from("subscriptions").select("id").eq("user_id", session.user.id).limit(1);
         if (existing && existing.length > 0) {
-          alert("You already have used a plan or trial.");
+          alert("You already have a plan or trial.");
           return;
         }
-
         const trialPlan = plans.find(p => p.is_trial);
         if (!trialPlan) return alert("Trial plan not found");
-
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + trialPlan.duration_days);
-
         const { error } = await supabase.from("subscriptions").insert({
           user_id: session.user.id,
           plan_id: trialPlan.id,
@@ -162,32 +216,25 @@
           start_date: new Date().toISOString(),
           end_date: endDate.toISOString()
         });
-
-        if (error) {
-          alert("Error: " + error.message);
-        } else {
+        if (error) alert("Error: " + error.message);
+        else {
           alert("🎉 7-Day Free Trial Activated!");
           loadPlansAndSubscription();
         }
       };
 
-      // Razorpay Payment
       const handleBuyPlan = (plan) => {
         if (!session) return;
         setPaymentLoading(true);
-
         const options = {
           key: RAZORPAY_KEY_ID,
-          amount: plan.price, // already in paise
+          amount: plan.price,
           currency: "INR",
           name: "Fluento",
           description: plan.name + " - Human Coach",
-          image: "",
           handler: async function (response) {
-            // Payment success
             const endDate = new Date();
             endDate.setDate(endDate.getDate() + plan.duration_days);
-
             const { error } = await supabase.from("subscriptions").insert({
               user_id: session.user.id,
               plan_id: plan.id,
@@ -196,28 +243,17 @@
               end_date: endDate.toISOString(),
               razorpay_payment_id: response.razorpay_payment_id
             });
-
-            if (error) {
-              alert("Payment successful but failed to activate plan. Contact support.");
-            } else {
+            if (error) alert("Payment successful but failed to activate plan.");
+            else {
               alert("✅ Payment Successful! Plan activated.");
               loadPlansAndSubscription();
             }
             setPaymentLoading(false);
           },
-          prefill: {
-            email: session.user.email
-          },
-          theme: {
-            color: "#f43f5e"
-          },
-          modal: {
-            ondismiss: function() {
-              setPaymentLoading(false);
-            }
-          }
+          prefill: { email: session.user.email },
+          theme: { color: "#f43f5e" },
+          modal: { ondismiss: () => setPaymentLoading(false) }
         };
-
         const rzp = new window.Razorpay(options);
         rzp.on("payment.failed", function (response) {
           alert("Payment failed: " + response.error.description);
@@ -226,7 +262,6 @@
         rzp.open();
       };
 
-      // AI functions
       const handleSelectLevel = (chosenLevel) => {
         setLevel(chosenLevel);
         setShowLevelModal(false);
@@ -265,42 +300,26 @@
       const sendMessage = async (text) => {
         const trimmed = (text || "").trim();
         if (!trimmed || isTyping || !level || !session) return;
-
         setInputText("");
+        setMicStatus("");
+        finalTextRef.current = "";
         setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
         setIsTyping(true);
-
         try {
           const response = await fetch(WORKER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: session.user.id,
-              message: trimmed,
-              level: level
-            })
+            body: JSON.stringify({ userId: session.user.id, message: trimmed, level })
           });
           const data = await response.json();
           if (data.reply) {
             const parsed = parseCorrection(data.reply);
-            setMessages(prev => [...prev, {
-              sender: "partner",
-              text: parsed.text,
-              correction: parsed.correction
-            }]);
+            setMessages(prev => [...prev, { sender: "partner", text: parsed.text, correction: parsed.correction }]);
           } else {
-            setMessages(prev => [...prev, {
-              sender: "partner",
-              text: "Sorry, I had trouble understanding. Can you try again?",
-              correction: null
-            }]);
+            setMessages(prev => [...prev, { sender: "partner", text: "Sorry, I had trouble understanding. Can you try again?", correction: null }]);
           }
         } catch (err) {
-          setMessages(prev => [...prev, {
-            sender: "partner",
-            text: "Connection problem. Please try again.",
-            correction: null
-          }]);
+          setMessages(prev => [...prev, { sender: "partner", text: "Connection problem. Please try again.", correction: null }]);
         }
         setIsTyping(false);
       };
@@ -310,25 +329,19 @@
         sendMessage(inputText);
       };
 
-      if (loading) {
-        return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
-      }
+      if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
 
       // Login
       if (!session) {
         return (
           <div className="min-h-screen bg-black flex items-center justify-center p-4">
             <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 w-full max-w-md text-center">
-              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white">
-                <MicIcon />
-              </div>
+              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white"><MicIcon /></div>
               <h1 className="text-2xl font-semibold text-white mb-1">Fluento</h1>
               <p className="text-neutral-400 text-sm mb-8">English Speaking Partner</p>
               {authError && <div className="text-red-400 text-sm mb-4">{authError}</div>}
-              <button onClick={handleGoogleLogin} disabled={authLoading}
-                className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-800 font-medium py-3.5 rounded-xl">
-                <GoogleIcon />
-                {authLoading ? "Redirecting..." : "Continue with Google"}
+              <button onClick={handleGoogleLogin} disabled={authLoading} className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-800 font-medium py-3.5 rounded-xl">
+                <GoogleIcon /> {authLoading ? "Redirecting..." : "Continue with Google"}
               </button>
             </div>
           </div>
@@ -340,19 +353,15 @@
         return (
           <div className="min-h-screen bg-black flex items-center justify-center p-4">
             <div className="bg-black border border-neutral-800 rounded-3xl max-w-md w-full p-8 text-center">
-              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white">
-                <MicIcon />
-              </div>
+              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white"><MicIcon /></div>
               <h2 className="text-2xl font-semibold mb-2 text-white">Welcome to Fluento</h2>
               <p className="text-neutral-400 text-sm mb-8">How would you like to practice English?</p>
               <div className="space-y-4">
-                <button onClick={() => { setMainChoice("ai"); setShowLevelModal(true); }}
-                  className="w-full py-5 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white">
+                <button onClick={() => { setMainChoice("ai"); setShowLevelModal(true); }} className="w-full py-5 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white">
                   <div className="font-medium text-lg">Practice with AI</div>
                   <div className="text-sm text-neutral-400">Speak or chat with AI anytime</div>
                 </button>
-                <button onClick={() => setMainChoice("human")}
-                  className="w-full py-5 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white">
+                <button onClick={() => setMainChoice("human")} className="w-full py-5 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white">
                   <div className="font-medium text-lg">Talk with Human Coach</div>
                   <div className="text-sm text-neutral-400">Real teachers • From ₹49</div>
                 </button>
@@ -363,7 +372,7 @@
         );
       }
 
-      // Human Coach Plans
+      // Human Coach
       if (mainChoice === "human") {
         return (
           <div className="min-h-screen bg-black text-white p-4">
@@ -373,26 +382,17 @@
                 <h1 className="text-xl font-semibold">Human Coach</h1>
                 <div className="w-10"></div>
               </div>
-
               {subscription ? (
                 <div className="bg-emerald-950/40 border border-emerald-800 rounded-2xl p-6 text-center">
                   <div className="text-emerald-400 font-medium mb-1">Active Plan</div>
                   <div className="text-lg font-semibold">{subscription.plans?.name}</div>
-                  <div className="text-sm text-neutral-400 mt-1">
-                    Valid till {new Date(subscription.end_date).toLocaleDateString()}
-                  </div>
-                  <button className="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-xl font-medium">
-                    Book a Session (Coming Soon)
-                  </button>
+                  <div className="text-sm text-neutral-400 mt-1">Valid till {new Date(subscription.end_date).toLocaleDateString()}</div>
+                  <button className="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-xl font-medium">Book a Session (Coming Soon)</button>
                 </div>
               ) : (
                 <>
-                  <p className="text-neutral-400 text-sm mb-6 text-center">
-                    Get personal spoken English coaching from real teachers
-                  </p>
-                  {plansLoading ? (
-                    <div className="text-center text-neutral-500 py-10">Loading plans...</div>
-                  ) : (
+                  <p className="text-neutral-400 text-sm mb-6 text-center">Get personal spoken English coaching from real teachers</p>
+                  {plansLoading ? <div className="text-center text-neutral-500 py-10">Loading plans...</div> : (
                     <div className="space-y-4">
                       {plans.map(plan => (
                         <div key={plan.id} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5">
@@ -402,22 +402,14 @@
                               <div className="text-sm text-neutral-400">{plan.description}</div>
                             </div>
                             <div className="text-right">
-                              <div className="text-xl font-bold text-rose-400">
-                                {plan.price === 0 ? "Free" : `₹${plan.price / 100}`}
-                              </div>
+                              <div className="text-xl font-bold text-rose-400">{plan.price === 0 ? "Free" : `₹${plan.price / 100}`}</div>
                               <div className="text-xs text-neutral-500">{plan.duration_days} days</div>
                             </div>
                           </div>
                           {plan.is_trial ? (
-                            <button onClick={startFreeTrial}
-                              className="w-full bg-emerald-600 hover:bg-emerald-700 py-2.5 rounded-xl text-sm font-medium">
-                              Start 7-Day Free Trial
-                            </button>
+                            <button onClick={startFreeTrial} className="w-full bg-emerald-600 hover:bg-emerald-700 py-2.5 rounded-xl text-sm font-medium">Start 7-Day Free Trial</button>
                           ) : (
-                            <button
-                              onClick={() => handleBuyPlan(plan)}
-                              disabled={paymentLoading}
-                              className="w-full bg-rose-500 hover:bg-rose-600 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
+                            <button onClick={() => handleBuyPlan(plan)} disabled={paymentLoading} className="w-full bg-rose-500 hover:bg-rose-600 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
                               {paymentLoading ? "Processing..." : "Buy Now"}
                             </button>
                           )}
@@ -432,18 +424,15 @@
         );
       }
 
-      // Level Selection
+      // Level
       if (showLevelModal) {
         return (
           <div className="min-h-screen bg-black flex items-center justify-center p-4">
             <div className="bg-black border border-neutral-800 rounded-3xl max-w-md w-full p-8 text-center">
-              <h2 className="text-2xl font-semibold mb-2 text-white">Choose Your Level</h2>
-              <div className="space-y-3 mt-6">
+              <h2 className="text-2xl font-semibold mb-6 text-white">Choose Your Level</h2>
+              <div className="space-y-3">
                 {["Beginner", "Intermediate", "Advanced"].map(l => (
-                  <button key={l} onClick={() => handleSelectLevel(l)}
-                    className="w-full py-4 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-white text-left">
-                    {l}
-                  </button>
+                  <button key={l} onClick={() => handleSelectLevel(l)} className="w-full py-4 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-white text-left">{l}</button>
                 ))}
               </div>
               <button onClick={() => setMainChoice(null)} className="mt-6 text-sm text-neutral-500">← Back</button>
@@ -452,28 +441,22 @@
         );
       }
 
-      // Mode Selection
+      // Mode
       if (showModeModal) {
         return (
           <div className="min-h-screen bg-black flex items-center justify-center p-4">
             <div className="bg-black border border-neutral-800 rounded-3xl max-w-md w-full p-8 text-center">
               <h2 className="text-2xl font-semibold mb-6 text-white">Choose Mode</h2>
               <div className="space-y-4">
-                <button onClick={() => handleSelectMode("voice")}
-                  className="w-full py-4 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-white">
-                  Voice Mode
-                </button>
-                <button onClick={() => handleSelectMode("text")}
-                  className="w-full py-4 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-white">
-                  Text Mode
-                </button>
+                <button onClick={() => handleSelectMode("voice")} className="w-full py-4 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-white">Voice Mode</button>
+                <button onClick={() => handleSelectMode("text")} className="w-full py-4 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-white">Text Mode</button>
               </div>
             </div>
           </div>
         );
       }
 
-      // AI Chat
+      // AI Chat / Voice
       return (
         <div className="flex h-screen bg-black text-white">
           <div className="flex-1 flex flex-col">
@@ -482,12 +465,11 @@
               <span className="text-sm">{level} · {mode}</span>
               <button onClick={handleLogout} className="text-sm text-red-400">Logout</button>
             </div>
+
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((msg, idx) => (
                 <div key={idx} className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                    msg.sender === "user" ? "bg-rose-500" : "bg-neutral-900 border border-neutral-800"
-                  }`}>
+                  <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${msg.sender === "user" ? "bg-rose-500" : "bg-neutral-900 border border-neutral-800"}`}>
                     {msg.text}
                   </div>
                 </div>
@@ -495,13 +477,26 @@
               {isTyping && <div className="text-neutral-500 text-sm">Partner is typing...</div>}
               <div ref={messagesEndRef} />
             </div>
+
             <div className="p-4 border-t border-neutral-800">
-              <form onSubmit={handleSendMessage} className="flex gap-3">
-                <input value={inputText} onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Type your message..."
-                  className="flex-1 bg-neutral-900 border border-neutral-700 rounded-2xl px-4 py-3 text-white focus:outline-none" />
-                <button type="submit" className="bg-rose-500 px-5 py-3 rounded-2xl">Send</button>
-              </form>
+              {mode === "voice" ? (
+                <div className="flex flex-col items-center gap-3">
+                  {inputText && (
+                    <div className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2 text-sm text-center">{inputText}</div>
+                  )}
+                  <button onClick={toggleListening}
+                    className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${isListening ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50" : "bg-neutral-800 hover:bg-neutral-700"}`}>
+                    <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
+                  </button>
+                  <p className="text-xs text-neutral-400">{micStatus || (isListening ? "Listening... Tap again to send" : "Tap the mic to speak")}</p>
+                </div>
+              ) : (
+                <form onSubmit={handleSendMessage} className="flex gap-3">
+                  <input value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="Type your message..."
+                    className="flex-1 bg-neutral-900 border border-neutral-700 rounded-2xl px-4 py-3 text-white focus:outline-none" />
+                  <button type="submit" className="bg-rose-500 px-5 py-3 rounded-2xl">Send</button>
+                </form>
+              )}
             </div>
           </div>
         </div>
