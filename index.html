@@ -26,13 +26,15 @@
       { id: "travel", title: "Travel & Airport", desc: "Airport, hotel, directions", prompt: "You are a helpful person at an airport/hotel. Help the user practice travel English." },
       { id: "shopping", title: "Shopping", desc: "Buy clothes, food, bargain", prompt: "You are a shopkeeper. Help the user practice shopping conversations." },
       { id: "daily", title: "Daily Conversation", desc: "Casual daily English", prompt: "You are a friendly person. Have a natural daily conversation with the user." },
-      { id: "doctor", title: "Doctor Visit", desc: "Explain symptoms, understand advice", prompt: "You are a doctor. Help the user practice explaining health problems." },
-      { id: "restaurant", title: "Restaurant", desc: "Order food, ask questions", prompt: "You are a waiter in a restaurant. Help the user practice ordering food." }
+      { id: "doctor", title: "Doctor Visit", desc: "Explain symptoms", prompt: "You are a doctor. Help the user practice explaining health problems." },
+      { id: "restaurant", title: "Restaurant", desc: "Order food", prompt: "You are a waiter. Help the user practice ordering food." }
     ];
 
     const MicIcon = ({ size = 28, className = "" }) => (
       <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" x2="12" y1="19" y2="22"/>
       </svg>
     );
 
@@ -63,19 +65,14 @@
       const [micStatus, setMicStatus] = useState("");
       const [showLevelModal, setShowLevelModal] = useState(false);
       const [showModeModal, setShowModeModal] = useState(false);
-      const [isReviewingVoice, setIsReviewingVoice] = useState(false);
 
-      // New features state
       const [showRolePlay, setShowRolePlay] = useState(false);
       const [activeRolePlay, setActiveRolePlay] = useState(null);
       const [showDashboard, setShowDashboard] = useState(false);
-      const [showHistory, setShowHistory] = useState(false);
       const [showMistakes, setShowMistakes] = useState(false);
-      const [dailyGoal] = useState(10); // messages per day
+      const [dailyGoal] = useState(10);
       const [todayMessages, setTodayMessages] = useState(0);
       const [mistakes, setMistakes] = useState([]);
-      const [history, setHistory] = useState([]);
-
       const [currentStreak, setCurrentStreak] = useState(0);
       const [longestStreak, setLongestStreak] = useState(0);
 
@@ -94,20 +91,19 @@
       useEffect(() => { isTypingRef.current = isTyping; }, [isTyping]);
       useEffect(() => { activeRolePlayRef.current = activeRolePlay; }, [activeRolePlay]);
 
-      // Theme
       useEffect(() => {
         localStorage.setItem("fluento-theme", theme);
-        document.body.style.backgroundColor = isDark ? "#000" : "#f3f4f6";
+        document.body.style.backgroundColor = isDark ? "#000000" : "#f3f4f6";
       }, [theme, isDark]);
 
       const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
 
-      // Theme classes
       const bg = isDark ? "bg-black" : "bg-gray-100";
       const card = isDark ? "bg-neutral-900 border-neutral-800" : "bg-white border-gray-200";
       const text = isDark ? "text-white" : "text-gray-900";
       const muted = isDark ? "text-neutral-400" : "text-gray-500";
       const inputBg = isDark ? "bg-neutral-900 border-neutral-700" : "bg-white border-gray-300";
+      const btnBg = isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300";
 
       useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -144,13 +140,9 @@
               levelRef.current = data.level;
             }
           }
-          // Load mistakes
-          const { data: mistakeData } = await supabase.from("mistakes").select("*").eq("user_id", sess.user.id).order("count", { ascending: false }).limit(20);
-          setMistakes(mistakeData || []);
         } catch (e) {}
       };
 
-      // Speech Recognition
       useEffect(() => {
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) return;
@@ -166,9 +158,13 @@
         };
         recognition.onresult = (e) => {
           let t = "";
-          for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            t += e.results[i][0].transcript;
+          }
           setInputText(t.trim());
-          if (e.results[e.results.length - 1].isFinal) finalTextRef.current = t.trim();
+          if (e.results[e.results.length - 1].isFinal) {
+            finalTextRef.current = t.trim();
+          }
         };
         recognition.onerror = (e) => {
           setIsListening(false);
@@ -181,19 +177,26 @@
           if (text) {
             setMicStatus("Sending...");
             setTimeout(() => sendMessage(text), 200);
-          } else setMicStatus("No speech detected");
+          } else {
+            setMicStatus("No speech detected");
+          }
         };
         recognitionRef.current = recognition;
       }, []);
 
       const toggleListening = () => {
-        if (!recognitionRef.current) return setMicStatus("Speech not supported");
+        if (!recognitionRef.current) {
+          setMicStatus("Speech not supported");
+          return;
+        }
         if (isListening) {
-          try { recognitionRef.current.stop(); } catch(e) {}
+          try { recognitionRef.current.stop(); } catch (e) {}
         } else {
           finalTextRef.current = "";
           setInputText("");
-          try { recognitionRef.current.start(); } catch(e) { setMicStatus("Could not start mic"); }
+          try { recognitionRef.current.start(); } catch (e) {
+            setMicStatus("Could not start mic");
+          }
         }
       };
 
@@ -203,7 +206,7 @@
         const u = new SpeechSynthesisUtterance(text);
         u.rate = 0.95;
         const voices = window.speechSynthesis.getVoices();
-        let v = voices.find(v => v.name.toLowerCase().includes("daniel"));
+        const v = voices.find(v => v.name.toLowerCase().includes("daniel"));
         if (v) u.voice = v;
         window.speechSynthesis.speak(u);
       };
@@ -218,10 +221,11 @@
       const handleGoogleLogin = async () => {
         setAuthLoading(true);
         try {
-          await supabase.auth.signInWithOAuth({
+          const { error } = await supabase.auth.signInWithOAuth({
             provider: "google",
             options: { redirectTo: "https://samimmandal.github.io/Fluento-app/" }
           });
+          if (error) throw error;
         } catch (err) {
           setAuthError(err.message);
           setAuthLoading(false);
@@ -243,7 +247,7 @@
         setMode("text");
         setMessages([{
           sender: "partner",
-          text: `Role Play started: ${role.title}. ${role.desc}. Let's begin!`,
+          text: "Role Play started: " + role.title + ". " + role.desc + ". Let's begin!",
           correction: null
         }]);
       };
@@ -252,22 +256,17 @@
         if (!raw.includes("CORRECTION:")) return { text: raw, correction: null };
         const parts = raw.split("CORRECTION:");
         const match = parts[1].trim().match(/(.+?)\s*→\s*(.+?)(?:\s*\((.+)\))?$/);
-        if (match) return { text: parts[0].trim(), correction: { original: match[1].trim(), corrected: match[2].trim(), tip: match[3] || "" } };
+        if (match) {
+          return {
+            text: parts[0].trim(),
+            correction: {
+              original: match[1].trim(),
+              corrected: match[2].trim(),
+              tip: match[3] || ""
+            }
+          };
+        }
         return { text: raw, correction: null };
-      };
-
-      const saveMistake = async (original, corrected) => {
-        if (!sessionRef.current) return;
-        try {
-          // Simple: just insert
-          await supabase.from("mistakes").insert({
-            user_id: sessionRef.current.user.id,
-            original,
-            corrected,
-            count: 1,
-            created_at: new Date().toISOString()
-          });
-        } catch(e) {}
       };
 
       const sendMessage = async (text) => {
@@ -300,9 +299,6 @@
           if (data.reply) {
             const parsed = parseCorrection(data.reply);
             setMessages(prev => [...prev, { sender: "partner", text: parsed.text, correction: parsed.correction }]);
-            if (parsed.correction) {
-              saveMistake(parsed.correction.original, parsed.correction.corrected);
-            }
             if (modeRef.current === "voice") speakText(parsed.text);
           }
         } catch (e) {
@@ -312,18 +308,22 @@
         isTypingRef.current = false;
       };
 
-      if (loading) return <div className={`h-screen ${bg} flex items-center justify-center ${text}`}>Loading...</div>;
+      if (loading) {
+        return <div className={"h-screen " + bg + " flex items-center justify-center " + text}>Loading...</div>;
+      }
 
-      // Login
       if (!session) {
         return (
-          <div className={`min-h-screen ${bg} flex items-center justify-center p-4`}>
-            <div className={`${card} border rounded-3xl p-8 w-full max-w-md text-center`}>
-              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white"><MicIcon /></div>
-              <h1 className={`text-2xl font-semibold ${text} mb-1`}>Fluento</h1>
-              <p className={`${muted} text-sm mb-8`}>English Speaking Partner</p>
+          <div className={"min-h-screen " + bg + " flex items-center justify-center p-4"}>
+            <div className={card + " border rounded-3xl p-8 w-full max-w-md text-center"}>
+              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white">
+                <MicIcon />
+              </div>
+              <h1 className={"text-2xl font-semibold " + text + " mb-1"}>Fluento</h1>
+              <p className={muted + " text-sm mb-8"}>English Speaking Partner</p>
               {authError && <div className="text-red-500 text-sm mb-4">{authError}</div>}
-              <button onClick={handleGoogleLogin} disabled={authLoading} className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3.5 rounded-xl border">
+              <button onClick={handleGoogleLogin} disabled={authLoading}
+                className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3.5 rounded-xl border">
                 <GoogleIcon /> {authLoading ? "Redirecting..." : "Continue with Google"}
               </button>
             </div>
@@ -331,22 +331,21 @@
         );
       }
 
-      // Role Play Selection
       if (showRolePlay) {
         return (
-          <div className={`min-h-screen ${bg} ${text} p-4`}>
+          <div className={"min-h-screen " + bg + " " + text + " p-4"}>
             <div className="max-w-lg mx-auto">
               <div className="flex items-center justify-between mb-6">
-                <button onClick={() => setShowRolePlay(false)} className={`${muted} text-sm`}>← Back</button>
+                <button onClick={() => setShowRolePlay(false)} className={muted + " text-sm"}>← Back</button>
                 <h1 className="text-xl font-semibold">Role Play Mode</h1>
                 <div className="w-10"></div>
               </div>
               <div className="space-y-3">
                 {ROLE_PLAYS.map(role => (
                   <button key={role.id} onClick={() => startRolePlay(role)}
-                    className={`w-full text-left p-5 rounded-2xl border ${card} hover:border-rose-500 transition`}>
+                    className={"w-full text-left p-5 rounded-2xl border " + card + " hover:border-rose-500 transition"}>
                     <div className="font-semibold text-lg">{role.title}</div>
-                    <div className={`text-sm ${muted} mt-1`}>{role.desc}</div>
+                    <div className={"text-sm " + muted + " mt-1"}>{role.desc}</div>
                   </button>
                 ))}
               </div>
@@ -355,84 +354,52 @@
         );
       }
 
-      // Mistake Tracker
       if (showMistakes) {
         return (
-          <div className={`min-h-screen ${bg} ${text} p-4`}>
+          <div className={"min-h-screen " + bg + " " + text + " p-4"}>
             <div className="max-w-lg mx-auto">
               <div className="flex items-center justify-between mb-6">
-                <button onClick={() => setShowMistakes(false)} className={`${muted} text-sm`}>← Back</button>
+                <button onClick={() => setShowMistakes(false)} className={muted + " text-sm"}>← Back</button>
                 <h1 className="text-xl font-semibold">Mistake Tracker</h1>
                 <div className="w-10"></div>
               </div>
-              {mistakes.length === 0 ? (
-                <div className={`text-center ${muted} py-16`}>No mistakes recorded yet. Keep practicing!</div>
-              ) : (
-                <div className="space-y-3">
-                  {mistakes.map((m, i) => (
-                    <div key={i} className={`${card} border rounded-2xl p-4`}>
-                      <div className={`${muted} line-through text-sm`}>{m.original}</div>
-                      <div className="text-emerald-500 font-medium mt-1">→ {m.corrected}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      }
-
-      // History (simple)
-      if (showHistory) {
-        return (
-          <div className={`min-h-screen ${bg} ${text} p-4`}>
-            <div className="max-w-lg mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                <button onClick={() => setShowHistory(false)} className={`${muted} text-sm`}>← Back</button>
-                <h1 className="text-xl font-semibold">Conversation History</h1>
-                <div className="w-10"></div>
-              </div>
-              <div className={`text-center ${muted} py-16`}>
-                <p>Your recent conversations will appear here.</p>
-                <p className="text-sm mt-2">(Full history coming in next update)</p>
+              <div className={"text-center " + muted + " py-16"}>
+                Mistakes will appear here as you practice.
               </div>
             </div>
           </div>
         );
       }
 
-      // Dashboard
       if (showDashboard) {
         const goalPercent = Math.min(100, Math.round((todayMessages / dailyGoal) * 100));
         return (
-          <div className={`min-h-screen ${bg} ${text} p-4`}>
+          <div className={"min-h-screen " + bg + " " + text + " p-4"}>
             <div className="max-w-lg mx-auto">
               <div className="flex items-center justify-between mb-6">
-                <button onClick={() => setShowDashboard(false)} className={`${muted} text-sm`}>← Back</button>
+                <button onClick={() => setShowDashboard(false)} className={muted + " text-sm"}>← Back</button>
                 <h1 className="text-xl font-semibold">Dashboard</h1>
                 <div className="w-10"></div>
               </div>
 
-              {/* Daily Goal */}
-              <div className={`${card} border rounded-2xl p-5 mb-4`}>
+              <div className={card + " border rounded-2xl p-5 mb-4"}>
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-medium">Daily Goal</span>
                   <span className="text-sm text-rose-500">{todayMessages}/{dailyGoal} messages</span>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-3">
-                  <div className="bg-rose-500 h-3 rounded-full transition-all" style={{ width: goalPercent + "%" }}></div>
+                  <div className="bg-rose-500 h-3 rounded-full" style={{ width: goalPercent + "%" }}></div>
                 </div>
-                <div className={`text-xs ${muted} mt-2`}>{goalPercent}% completed today</div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className={`${card} border rounded-2xl p-5 text-center`}>
+                <div className={card + " border rounded-2xl p-5 text-center"}>
                   <div className="text-2xl font-bold">🔥 {currentStreak}</div>
-                  <div className={`text-xs ${muted}`}>Day Streak</div>
+                  <div className={"text-xs " + muted}>Day Streak</div>
                 </div>
-                <div className={`${card} border rounded-2xl p-5 text-center`}>
+                <div className={card + " border rounded-2xl p-5 text-center"}>
                   <div className="text-2xl font-bold">{longestStreak}</div>
-                  <div className={`text-xs ${muted}`}>Best Streak</div>
+                  <div className={"text-xs " + muted}>Best Streak</div>
                 </div>
               </div>
             </div>
@@ -440,128 +407,130 @@
         );
       }
 
-      // Level
       if (showLevelModal) {
         return (
-          <div className={`min-h-screen ${bg} flex items-center justify-center p-4`}>
-            <div className={`${card} border rounded-3xl max-w-md w-full p-8 text-center`}>
-              <h2 className={`text-2xl font-semibold mb-6 ${text}`}>Choose Your Level</h2>
+          <div className={"min-h-screen " + bg + " flex items-center justify-center p-4"}>
+            <div className={card + " border rounded-3xl max-w-md w-full p-8 text-center"}>
+              <h2 className={"text-2xl font-semibold mb-6 " + text}>Choose Your Level</h2>
               {["Beginner", "Intermediate", "Advanced"].map(l => (
                 <button key={l} onClick={() => { setLevel(l); setShowLevelModal(false); setShowModeModal(true); }}
-                  className={`w-full py-4 mb-3 rounded-2xl border ${card} ${text} text-left px-5`}>{l}</button>
+                  className={"w-full py-4 mb-3 rounded-2xl border " + card + " " + text + " text-left px-5"}>
+                  {l}
+                </button>
               ))}
             </div>
           </div>
         );
       }
 
-      // Mode
       if (showModeModal) {
         return (
-          <div className={`min-h-screen ${bg} flex items-center justify-center p-4`}>
-            <div className={`${card} border rounded-3xl max-w-md w-full p-8 text-center`}>
-              <h2 className={`text-2xl font-semibold mb-6 ${text}`}>How do you want to practice?</h2>
-              <button onClick={() => { setMode("voice"); setShowModeModal(false); setMessages([{sender:"partner", text:`Voice mode started at ${level} level. Speak something!`, correction:null}]); }}
-                className={`w-full py-5 mb-3 rounded-2xl border ${card} ${text} text-left px-5`}>
+          <div className={"min-h-screen " + bg + " flex items-center justify-center p-4"}>
+            <div className={card + " border rounded-3xl max-w-md w-full p-8 text-center"}>
+              <h2 className={"text-2xl font-semibold mb-6 " + text}>How do you want to practice?</h2>
+              <button onClick={() => { setMode("voice"); setShowModeModal(false); setMessages([{ sender: "partner", text: "Voice mode started. Speak something!", correction: null }]); }}
+                className={"w-full py-5 mb-3 rounded-2xl border " + card + " " + text + " text-left px-5"}>
                 <div className="font-medium text-lg">Speak with AI</div>
-                <div className={`text-sm ${muted}`}>Use microphone</div>
+                <div className={"text-sm " + muted}>Use microphone</div>
               </button>
-              <button onClick={() => { setMode("text"); setShowModeModal(false); setMessages([{sender:"partner", text:`Text mode started at ${level} level. Type something!`, correction:null}]); }}
-                className={`w-full py-5 mb-3 rounded-2xl border ${card} ${text} text-left px-5`}>
+              <button onClick={() => { setMode("text"); setShowModeModal(false); setMessages([{ sender: "partner", text: "Text mode started. Type something!", correction: null }]); }}
+                className={"w-full py-5 mb-3 rounded-2xl border " + card + " " + text + " text-left px-5"}>
                 <div className="font-medium text-lg">Chat with AI</div>
-                <div className={`text-sm ${muted}`}>Type messages</div>
+                <div className={"text-sm " + muted}>Type messages</div>
               </button>
               <button onClick={() => { setShowModeModal(false); setShowRolePlay(true); }}
-                className={`w-full py-5 rounded-2xl border ${card} ${text} text-left px-5`}>
+                className={"w-full py-5 rounded-2xl border " + card + " " + text + " text-left px-5"}>
                 <div className="font-medium text-lg">Role Play Mode</div>
-                <div className={`text-sm ${muted}`}>Interview, Travel, Shopping...</div>
+                <div className={"text-sm " + muted}>Interview, Travel, Shopping...</div>
               </button>
             </div>
           </div>
         );
       }
 
-      // Main Chat
       return (
-        <div className={`flex h-screen ${bg} ${text} overflow-hidden`}>
-          {/* Sidebar */}
-          <div className={`w-64 border-r ${isDark ? "border-neutral-800" : "border-gray-200"} hidden md:flex flex-col justify-between p-6`}>
+        <div className={"flex h-screen " + bg + " " + text + " overflow-hidden"}>
+          <div className={"w-64 border-r " + (isDark ? "border-neutral-800" : "border-gray-200") + " hidden md:flex flex-col justify-between p-6"}>
             <div>
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 flex items-center justify-center text-white"><MicIcon size={20}/></div>
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 flex items-center justify-center text-white">
+                  <MicIcon size={20} />
+                </div>
                 <span className="font-semibold">Fluento</span>
               </div>
-              <div className={`text-xs ${muted} mb-1`}>Logged in as</div>
-              <div className={`text-sm truncate mb-4 ${muted}`}>{session.user.email}</div>
+              <div className={"text-xs " + muted + " mb-1"}>Logged in as</div>
+              <div className={"text-sm truncate mb-4 " + muted}>{session.user.email}</div>
 
               <div className="bg-gradient-to-br from-orange-500/20 to-rose-500/10 border border-orange-500/30 rounded-2xl p-4 mb-3">
                 <div className="text-xs text-orange-500">Daily Streak</div>
                 <div className="text-xl font-bold">🔥 {currentStreak}</div>
               </div>
 
-              {/* Daily Goal Mini */}
-              <div className={`${card} border rounded-2xl p-3 mb-3`}>
+              <div className={card + " border rounded-2xl p-3 mb-3"}>
                 <div className="flex justify-between text-xs mb-1">
                   <span>Daily Goal</span>
                   <span className="text-rose-500">{todayMessages}/{dailyGoal}</span>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div className="bg-rose-500 h-2 rounded-full" style={{width: Math.min(100, (todayMessages/dailyGoal)*100) + "%"}}></div>
+                  <div className="bg-rose-500 h-2 rounded-full" style={{ width: Math.min(100, (todayMessages / dailyGoal) * 100) + "%" }}></div>
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <button onClick={() => setShowDashboard(true)} className={`w-full text-sm py-2.5 rounded-xl ${isDark ? "bg-neutral-800" : "bg-gray-200"}`}>📊 Dashboard</button>
-              <button onClick={() => setShowRolePlay(true)} className={`w-full text-sm py-2.5 rounded-xl ${isDark ? "bg-neutral-800" : "bg-gray-200"}`}>🎭 Role Play</button>
-              <button onClick={() => setShowMistakes(true)} className={`w-full text-sm py-2.5 rounded-xl ${isDark ? "bg-neutral-800" : "bg-gray-200"}`}>📝 Mistakes</button>
-              <button onClick={() => setShowHistory(true)} className={`w-full text-sm py-2.5 rounded-xl ${isDark ? "bg-neutral-800" : "bg-gray-200"}`}>💬 History</button>
-              <button onClick={toggleTheme} className={`w-full text-sm py-2.5 rounded-xl ${isDark ? "bg-neutral-800" : "bg-gray-200"}`}>
+              <button onClick={() => setShowDashboard(true)} className={"w-full text-sm py-2.5 rounded-xl " + btnBg}>📊 Dashboard</button>
+              <button onClick={() => setShowRolePlay(true)} className={"w-full text-sm py-2.5 rounded-xl " + btnBg}>🎭 Role Play</button>
+              <button onClick={() => setShowMistakes(true)} className={"w-full text-sm py-2.5 rounded-xl " + btnBg}>📝 Mistakes</button>
+              <button onClick={toggleTheme} className={"w-full text-sm py-2.5 rounded-xl " + btnBg}>
                 {isDark ? "☀️ Light Mode" : "🌙 Dark Mode"}
               </button>
               <button onClick={handleLogout} className="w-full text-sm text-red-500 py-2 rounded-xl">Logout</button>
             </div>
           </div>
 
-          {/* Chat */}
           <div className="flex-1 flex flex-col relative">
-            <div className={`h-14 border-b ${isDark ? "border-neutral-800" : "border-gray-200"} flex items-center justify-between px-4`}>
+            <div className={"h-14 border-b " + (isDark ? "border-neutral-800" : "border-gray-200") + " flex items-center justify-between px-4"}>
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></div>
                 <span className="text-sm">{activeRolePlay ? activeRolePlay.title : "Practice"}</span>
               </div>
               <div className="flex items-center gap-2">
                 {currentStreak > 0 && <span className="text-xs bg-orange-500/20 text-orange-500 px-2 py-0.5 rounded-full">🔥 {currentStreak}</span>}
-                <span className={`text-xs px-2 py-0.5 rounded-full ${card} border`}>{level} · {mode}</span>
+                <span className={"text-xs px-2 py-0.5 rounded-full border " + card}>{level} · {mode}</span>
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-3xl mx-auto w-full pb-32">
               {messages.map((msg, i) => (
-                <div key={i} className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm \( {msg.sender === "user" ? "bg-rose-500 text-white" : ` \){card} border`}`}>
+                <div key={i} className={"flex " + (msg.sender === "user" ? "justify-end" : "justify-start")}>
+                  <div className={"max-w-[80%] rounded-2xl px-4 py-3 text-sm " + (msg.sender === "user" ? "bg-rose-500 text-white" : card + " border")}>
                     {msg.text}
                   </div>
                 </div>
               ))}
-              {isTyping && <div className={`${muted} text-sm`}>Partner is typing...</div>}
+              {isTyping && <div className={muted + " text-sm"}>Partner is typing...</div>}
               <div ref={messagesEndRef} />
             </div>
 
-            <div className={`absolute bottom-0 left-0 right-0 p-4 ${bg} border-t ${isDark ? "border-neutral-800" : "border-gray-200"}`}>
+            <div className={"absolute bottom-0 left-0 right-0 p-4 " + bg + " border-t " + (isDark ? "border-neutral-800" : "border-gray-200")}>
               <div className="max-w-3xl mx-auto">
                 {mode === "voice" ? (
                   <div className="flex flex-col items-center gap-2">
-                    {inputText && <div className={`w-full ${card} border rounded-xl px-4 py-2 text-sm text-center`}>{inputText}</div>}
-                    <button onClick={toggleListening} className={`w-16 h-16 rounded-full flex items-center justify-center ${isListening ? "bg-rose-500 text-white scale-110" : isDark ? "bg-neutral-800" : "bg-gray-200"}`}>
+                    {inputText && <div className={"w-full border rounded-xl px-4 py-2 text-sm text-center " + card}>{inputText}</div>}
+                    <button onClick={toggleListening}
+                      className={"w-16 h-16 rounded-full flex items-center justify-center " + (isListening ? "bg-rose-500 text-white scale-110" : (isDark ? "bg-neutral-800" : "bg-gray-200"))}>
                       <MicIcon size={28} />
                     </button>
-                    <p className={`text-xs ${muted}`}>{micStatus || "Tap mic to speak"}</p>
+                    <p className={"text-xs " + muted}>{micStatus || "Tap mic to speak"}</p>
                   </div>
                 ) : (
-                  <form onSubmit={e => { e.preventDefault(); sendMessage(inputText); }} className="flex gap-2">
-                    <input value={inputText} onChange={e => setInputText(e.target.value)}
-                      placeholder="Type your message..." className={`flex-1 ${inputBg} border rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-rose-500 ${text}`} />
+                  <form onSubmit={(e) => { e.preventDefault(); sendMessage(inputText); }} className="flex gap-2">
+                    <input
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                      placeholder="Type your message..."
+                      className={"flex-1 border rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-rose-500 " + inputBg + " " + text}
+                    />
                     <button type="submit" className="bg-rose-500 text-white px-5 py-3 rounded-2xl text-sm font-medium">Send</button>
                   </form>
                 )}
