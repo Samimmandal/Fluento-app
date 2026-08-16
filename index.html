@@ -10,7 +10,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="bg-black">
   <div id="root"></div>
 
   <script type="text/babel">
@@ -22,19 +22,59 @@
     const WORKER_URL = "https://morning-bonus-5828.imsamimmandal601.workers.dev";
 
     const ROLE_PLAYS = [
-      { id: "interview", title: "Job Interview", desc: "Practice common interview questions", prompt: "You are a professional job interviewer. Ask relevant interview questions one by one and give feedback." },
-      { id: "travel", title: "Travel & Airport", desc: "Airport, hotel, directions", prompt: "You are a helpful person at an airport/hotel. Help the user practice travel English." },
-      { id: "shopping", title: "Shopping", desc: "Buy clothes, food, bargain", prompt: "You are a shopkeeper. Help the user practice shopping conversations." },
-      { id: "daily", title: "Daily Conversation", desc: "Casual daily English", prompt: "You are a friendly person. Have a natural daily conversation with the user." },
-      { id: "doctor", title: "Doctor Visit", desc: "Explain symptoms", prompt: "You are a doctor. Help the user practice explaining health problems." },
-      { id: "restaurant", title: "Restaurant", desc: "Order food", prompt: "You are a waiter. Help the user practice ordering food." }
+      { id: "interview", title: "Job Interview", desc: "Practice interview questions", prompt: "You are a professional job interviewer. Ask one question at a time and give short feedback." },
+      { id: "travel", title: "Travel & Airport", desc: "Airport, hotel, directions", prompt: "You are helping someone at an airport or hotel. Keep replies short and natural." },
+      { id: "shopping", title: "Shopping", desc: "Buy clothes or food", prompt: "You are a friendly shopkeeper. Keep the conversation natural and short." },
+      { id: "daily", title: "Daily Conversation", desc: "Casual daily English", prompt: "You are a friendly person having a casual conversation. Speak naturally like a human." },
+      { id: "doctor", title: "Doctor Visit", desc: "Explain symptoms", prompt: "You are a doctor. Ask about symptoms and give simple advice." },
+      { id: "restaurant", title: "Restaurant", desc: "Order food", prompt: "You are a waiter. Help the customer order food naturally." }
     ];
 
+    // Icons
     const MicIcon = ({ size = 28, className = "" }) => (
       <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
         <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
         <line x1="12" x2="12" y1="19" y2="22"/>
+      </svg>
+    );
+
+    const ChartIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
+      </svg>
+    );
+
+    const MaskIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+      </svg>
+    );
+
+    const AlertIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    );
+
+    const SunIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    );
+
+    const MoonIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    );
+
+    const BackIcon = () => (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
       </svg>
     );
 
@@ -65,14 +105,12 @@
       const [micStatus, setMicStatus] = useState("");
       const [showLevelModal, setShowLevelModal] = useState(false);
       const [showModeModal, setShowModeModal] = useState(false);
-
       const [showRolePlay, setShowRolePlay] = useState(false);
       const [activeRolePlay, setActiveRolePlay] = useState(null);
       const [showDashboard, setShowDashboard] = useState(false);
       const [showMistakes, setShowMistakes] = useState(false);
       const [dailyGoal] = useState(10);
       const [todayMessages, setTodayMessages] = useState(0);
-      const [mistakes, setMistakes] = useState([]);
       const [currentStreak, setCurrentStreak] = useState(0);
       const [longestStreak, setLongestStreak] = useState(0);
 
@@ -84,16 +122,18 @@
       const modeRef = useRef(mode);
       const isTypingRef = useRef(isTyping);
       const activeRolePlayRef = useRef(null);
+      const messagesRef = useRef([]);
 
       useEffect(() => { sessionRef.current = session; }, [session]);
       useEffect(() => { levelRef.current = level; }, [level]);
       useEffect(() => { modeRef.current = mode; }, [mode]);
       useEffect(() => { isTypingRef.current = isTyping; }, [isTyping]);
       useEffect(() => { activeRolePlayRef.current = activeRolePlay; }, [activeRolePlay]);
+      useEffect(() => { messagesRef.current = messages; }, [messages]);
 
       useEffect(() => {
         localStorage.setItem("fluento-theme", theme);
-        document.body.style.backgroundColor = isDark ? "#000000" : "#f3f4f6";
+        document.body.style.backgroundColor = isDark ? "#000" : "#f3f4f6";
       }, [theme, isDark]);
 
       const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
@@ -143,6 +183,7 @@
         } catch (e) {}
       };
 
+      // Speech Recognition
       useEffect(() => {
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SR) return;
@@ -158,13 +199,9 @@
         };
         recognition.onresult = (e) => {
           let t = "";
-          for (let i = e.resultIndex; i < e.results.length; i++) {
-            t += e.results[i][0].transcript;
-          }
+          for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
           setInputText(t.trim());
-          if (e.results[e.results.length - 1].isFinal) {
-            finalTextRef.current = t.trim();
-          }
+          if (e.results[e.results.length - 1].isFinal) finalTextRef.current = t.trim();
         };
         recognition.onerror = (e) => {
           setIsListening(false);
@@ -177,26 +214,19 @@
           if (text) {
             setMicStatus("Sending...");
             setTimeout(() => sendMessage(text), 200);
-          } else {
-            setMicStatus("No speech detected");
-          }
+          } else setMicStatus("No speech detected");
         };
         recognitionRef.current = recognition;
       }, []);
 
       const toggleListening = () => {
-        if (!recognitionRef.current) {
-          setMicStatus("Speech not supported");
-          return;
-        }
+        if (!recognitionRef.current) return setMicStatus("Speech not supported");
         if (isListening) {
-          try { recognitionRef.current.stop(); } catch (e) {}
+          try { recognitionRef.current.stop(); } catch(e) {}
         } else {
           finalTextRef.current = "";
           setInputText("");
-          try { recognitionRef.current.start(); } catch (e) {
-            setMicStatus("Could not start mic");
-          }
+          try { recognitionRef.current.start(); } catch(e) { setMicStatus("Could not start mic"); }
         }
       };
 
@@ -221,11 +251,10 @@
       const handleGoogleLogin = async () => {
         setAuthLoading(true);
         try {
-          const { error } = await supabase.auth.signInWithOAuth({
+          await supabase.auth.signInWithOAuth({
             provider: "google",
             options: { redirectTo: "https://samimmandal.github.io/Fluento-app/" }
           });
-          if (error) throw error;
         } catch (err) {
           setAuthError(err.message);
           setAuthLoading(false);
@@ -247,7 +276,7 @@
         setMode("text");
         setMessages([{
           sender: "partner",
-          text: "Role Play started: " + role.title + ". " + role.desc + ". Let's begin!",
+          text: "Okay, let's practice " + role.title + ". I'll start.",
           correction: null
         }]);
       };
@@ -259,11 +288,7 @@
         if (match) {
           return {
             text: parts[0].trim(),
-            correction: {
-              original: match[1].trim(),
-              corrected: match[2].trim(),
-              tip: match[3] || ""
-            }
+            correction: { original: match[1].trim(), corrected: match[2].trim(), tip: match[3] || "" }
           };
         }
         return { text: raw, correction: null };
@@ -280,11 +305,21 @@
         isTypingRef.current = true;
         setTodayMessages(prev => prev + 1);
 
+        // Build history for memory
+        const history = messagesRef.current
+          .filter(m => m.text)
+          .slice(-20)
+          .map(m => ({
+            role: m.sender === "user" ? "user" : "assistant",
+            content: m.text
+          }));
+
         try {
           const body = {
             userId: sessionRef.current.user.id,
             message: trimmed,
-            level: levelRef.current || "Beginner"
+            level: levelRef.current || "Beginner",
+            history: history
           };
           if (activeRolePlayRef.current) {
             body.rolePlay = activeRolePlayRef.current.prompt;
@@ -299,7 +334,10 @@
           if (data.reply) {
             const parsed = parseCorrection(data.reply);
             setMessages(prev => [...prev, { sender: "partner", text: parsed.text, correction: parsed.correction }]);
-            if (modeRef.current === "voice") speakText(parsed.text);
+            // Only speak in voice mode
+            if (modeRef.current === "voice") {
+              speakText(parsed.text);
+            }
           }
         } catch (e) {
           setMessages(prev => [...prev, { sender: "partner", text: "Connection problem. Try again.", correction: null }]);
@@ -308,22 +346,25 @@
         isTypingRef.current = false;
       };
 
+      // ========== RENDER ==========
+
       if (loading) {
         return <div className={"h-screen " + bg + " flex items-center justify-center " + text}>Loading...</div>;
       }
 
+      // Login
       if (!session) {
         return (
-          <div className={"min-h-screen " + bg + " flex items-center justify-center p-4"}>
-            <div className={card + " border rounded-3xl p-8 w-full max-w-md text-center"}>
+          <div className="min-h-screen bg-gradient-to-br from-black via-neutral-900 to-rose-950 flex items-center justify-center p-4">
+            <div className="bg-neutral-900/80 border border-neutral-800 rounded-3xl p-8 w-full max-w-md text-center backdrop-blur">
               <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white">
                 <MicIcon />
               </div>
-              <h1 className={"text-2xl font-semibold " + text + " mb-1"}>Fluento</h1>
-              <p className={muted + " text-sm mb-8"}>English Speaking Partner</p>
-              {authError && <div className="text-red-500 text-sm mb-4">{authError}</div>}
+              <h1 className="text-2xl font-semibold text-white mb-1">Fluento</h1>
+              <p className="text-neutral-400 text-sm mb-8">English Speaking Partner</p>
+              {authError && <div className="text-red-400 text-sm mb-4">{authError}</div>}
               <button onClick={handleGoogleLogin} disabled={authLoading}
-                className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3.5 rounded-xl border">
+                className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3.5 rounded-xl">
                 <GoogleIcon /> {authLoading ? "Redirecting..." : "Continue with Google"}
               </button>
             </div>
@@ -331,14 +372,106 @@
         );
       }
 
+      // Level Selection - Improved with logo + gradient
+      if (showLevelModal) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-black via-neutral-900 to-rose-950 flex items-center justify-center p-4">
+            <div className="bg-neutral-900/80 border border-neutral-800 rounded-3xl max-w-md w-full p-8 text-center backdrop-blur">
+              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white">
+                <MicIcon />
+              </div>
+              <h2 className="text-2xl font-semibold text-white mb-2">Choose Your Level</h2>
+              <p className="text-neutral-400 text-sm mb-8">Select your current English level</p>
+              <div className="space-y-3">
+                {[
+                  { title: "Beginner", subtitle: "A1-A2 · Gentle pace" },
+                  { title: "Intermediate", subtitle: "B1-B2 · Natural flow" },
+                  { title: "Advanced", subtitle: "C1-C2 · Idioms & nuance" }
+                ].map(item => (
+                  <button key={item.title}
+                    onClick={() => { setLevel(item.title); setShowLevelModal(false); setShowModeModal(true); }}
+                    className="w-full py-4 px-5 bg-neutral-800/80 hover:bg-neutral-700 border border-neutral-700 rounded-2xl flex justify-between items-center text-left text-white transition">
+                    <div>
+                      <div className="font-medium">{item.title}</div>
+                      <div className="text-xs text-neutral-400">{item.subtitle}</div>
+                    </div>
+                    <span className="text-neutral-500">→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Mode Selection
+      if (showModeModal) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-black via-neutral-900 to-rose-950 flex items-center justify-center p-4">
+            <div className="bg-neutral-900/80 border border-neutral-800 rounded-3xl max-w-md w-full p-8 text-center backdrop-blur">
+              <h2 className="text-2xl font-semibold text-white mb-2">How do you want to practice?</h2>
+              <p className="text-neutral-400 text-sm mb-8">Choose your preferred way</p>
+              <div className="space-y-4">
+                <button onClick={() => {
+                  setMode("voice");
+                  setShowModeModal(false);
+                  setActiveRolePlay(null);
+                  setMessages([{ sender: "partner", text: "Hey! Ready when you are. Just tap the mic and start speaking.", correction: null }]);
+                }} className="w-full py-5 px-5 bg-neutral-800/80 hover:bg-neutral-700 border border-neutral-700 rounded-2xl text-left text-white transition">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-rose-500/20 rounded-xl flex items-center justify-center text-rose-400">
+                      <MicIcon size={24} />
+                    </div>
+                    <div>
+                      <div className="font-medium text-lg">Voice Mode</div>
+                      <div className="text-sm text-neutral-400">Speak with AI using microphone</div>
+                    </div>
+                  </div>
+                </button>
+
+                <button onClick={() => {
+                  setMode("text");
+                  setShowModeModal(false);
+                  setActiveRolePlay(null);
+                  setMessages([{ sender: "partner", text: "Hey! Type anything and I'll reply.", correction: null }]);
+                }} className="w-full py-5 px-5 bg-neutral-800/80 hover:bg-neutral-700 border border-neutral-700 rounded-2xl text-left text-white transition">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 text-xl">💬</div>
+                    <div>
+                      <div className="font-medium text-lg">Text Mode</div>
+                      <div className="text-sm text-neutral-400">Type messages and get replies</div>
+                    </div>
+                  </div>
+                </button>
+
+                <button onClick={() => { setShowModeModal(false); setShowRolePlay(true); }}
+                  className="w-full py-5 px-5 bg-neutral-800/80 hover:bg-neutral-700 border border-neutral-700 rounded-2xl text-left text-white transition">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400">
+                      <MaskIcon />
+                    </div>
+                    <div>
+                      <div className="font-medium text-lg">Role Play</div>
+                      <div className="text-sm text-neutral-400">Interview, Travel, Shopping...</div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Role Play List
       if (showRolePlay) {
         return (
           <div className={"min-h-screen " + bg + " " + text + " p-4"}>
             <div className="max-w-lg mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                <button onClick={() => setShowRolePlay(false)} className={muted + " text-sm"}>← Back</button>
-                <h1 className="text-xl font-semibold">Role Play Mode</h1>
-                <div className="w-10"></div>
+              <div className="flex items-center gap-3 mb-6">
+                <button onClick={() => setShowRolePlay(false)} className={"flex items-center gap-2 px-3 py-2 rounded-xl " + btnBg + " text-sm"}>
+                  <BackIcon /> Back
+                </button>
+                <h1 className="text-xl font-semibold">Role Play</h1>
               </div>
               <div className="space-y-3">
                 {ROLE_PLAYS.map(role => (
@@ -354,44 +487,27 @@
         );
       }
 
-      if (showMistakes) {
-        return (
-          <div className={"min-h-screen " + bg + " " + text + " p-4"}>
-            <div className="max-w-lg mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                <button onClick={() => setShowMistakes(false)} className={muted + " text-sm"}>← Back</button>
-                <h1 className="text-xl font-semibold">Mistake Tracker</h1>
-                <div className="w-10"></div>
-              </div>
-              <div className={"text-center " + muted + " py-16"}>
-                Mistakes will appear here as you practice.
-              </div>
-            </div>
-          </div>
-        );
-      }
-
+      // Dashboard
       if (showDashboard) {
         const goalPercent = Math.min(100, Math.round((todayMessages / dailyGoal) * 100));
         return (
           <div className={"min-h-screen " + bg + " " + text + " p-4"}>
             <div className="max-w-lg mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                <button onClick={() => setShowDashboard(false)} className={muted + " text-sm"}>← Back</button>
+              <div className="flex items-center gap-3 mb-6">
+                <button onClick={() => setShowDashboard(false)} className={"flex items-center gap-2 px-3 py-2 rounded-xl " + btnBg + " text-sm"}>
+                  <BackIcon /> Back
+                </button>
                 <h1 className="text-xl font-semibold">Dashboard</h1>
-                <div className="w-10"></div>
               </div>
-
               <div className={card + " border rounded-2xl p-5 mb-4"}>
-                <div className="flex justify-between items-center mb-2">
+                <div className="flex justify-between mb-2">
                   <span className="font-medium">Daily Goal</span>
-                  <span className="text-sm text-rose-500">{todayMessages}/{dailyGoal} messages</span>
+                  <span className="text-rose-500 text-sm">{todayMessages}/{dailyGoal}</span>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-3">
                   <div className="bg-rose-500 h-3 rounded-full" style={{ width: goalPercent + "%" }}></div>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className={card + " border rounded-2xl p-5 text-center"}>
                   <div className="text-2xl font-bold">🔥 {currentStreak}</div>
@@ -407,49 +523,27 @@
         );
       }
 
-      if (showLevelModal) {
+      // Mistakes
+      if (showMistakes) {
         return (
-          <div className={"min-h-screen " + bg + " flex items-center justify-center p-4"}>
-            <div className={card + " border rounded-3xl max-w-md w-full p-8 text-center"}>
-              <h2 className={"text-2xl font-semibold mb-6 " + text}>Choose Your Level</h2>
-              {["Beginner", "Intermediate", "Advanced"].map(l => (
-                <button key={l} onClick={() => { setLevel(l); setShowLevelModal(false); setShowModeModal(true); }}
-                  className={"w-full py-4 mb-3 rounded-2xl border " + card + " " + text + " text-left px-5"}>
-                  {l}
+          <div className={"min-h-screen " + bg + " " + text + " p-4"}>
+            <div className="max-w-lg mx-auto">
+              <div className="flex items-center gap-3 mb-6">
+                <button onClick={() => setShowMistakes(false)} className={"flex items-center gap-2 px-3 py-2 rounded-xl " + btnBg + " text-sm"}>
+                  <BackIcon /> Back
                 </button>
-              ))}
+                <h1 className="text-xl font-semibold">Mistakes</h1>
+              </div>
+              <div className={"text-center " + muted + " py-16"}>Mistakes will appear here as you practice.</div>
             </div>
           </div>
         );
       }
 
-      if (showModeModal) {
-        return (
-          <div className={"min-h-screen " + bg + " flex items-center justify-center p-4"}>
-            <div className={card + " border rounded-3xl max-w-md w-full p-8 text-center"}>
-              <h2 className={"text-2xl font-semibold mb-6 " + text}>How do you want to practice?</h2>
-              <button onClick={() => { setMode("voice"); setShowModeModal(false); setMessages([{ sender: "partner", text: "Voice mode started. Speak something!", correction: null }]); }}
-                className={"w-full py-5 mb-3 rounded-2xl border " + card + " " + text + " text-left px-5"}>
-                <div className="font-medium text-lg">Speak with AI</div>
-                <div className={"text-sm " + muted}>Use microphone</div>
-              </button>
-              <button onClick={() => { setMode("text"); setShowModeModal(false); setMessages([{ sender: "partner", text: "Text mode started. Type something!", correction: null }]); }}
-                className={"w-full py-5 mb-3 rounded-2xl border " + card + " " + text + " text-left px-5"}>
-                <div className="font-medium text-lg">Chat with AI</div>
-                <div className={"text-sm " + muted}>Type messages</div>
-              </button>
-              <button onClick={() => { setShowModeModal(false); setShowRolePlay(true); }}
-                className={"w-full py-5 rounded-2xl border " + card + " " + text + " text-left px-5"}>
-                <div className="font-medium text-lg">Role Play Mode</div>
-                <div className={"text-sm " + muted}>Interview, Travel, Shopping...</div>
-              </button>
-            </div>
-          </div>
-        );
-      }
-
+      // Main Chat
       return (
         <div className={"flex h-screen " + bg + " " + text + " overflow-hidden"}>
+          {/* Sidebar */}
           <div className={"w-64 border-r " + (isDark ? "border-neutral-800" : "border-gray-200") + " hidden md:flex flex-col justify-between p-6"}>
             <div>
               <div className="flex items-center gap-3 mb-6">
@@ -478,16 +572,27 @@
             </div>
 
             <div className="space-y-2">
-              <button onClick={() => setShowDashboard(true)} className={"w-full text-sm py-2.5 rounded-xl " + btnBg}>📊 Dashboard</button>
-              <button onClick={() => setShowRolePlay(true)} className={"w-full text-sm py-2.5 rounded-xl " + btnBg}>🎭 Role Play</button>
-              <button onClick={() => setShowMistakes(true)} className={"w-full text-sm py-2.5 rounded-xl " + btnBg}>📝 Mistakes</button>
-              <button onClick={toggleTheme} className={"w-full text-sm py-2.5 rounded-xl " + btnBg}>
-                {isDark ? "☀️ Light Mode" : "🌙 Dark Mode"}
+              <button onClick={() => setShowDashboard(true)} className={"w-full text-sm py-2.5 rounded-xl flex items-center justify-center gap-2 " + btnBg}>
+                <ChartIcon /> Dashboard
+              </button>
+              <button onClick={() => setShowRolePlay(true)} className={"w-full text-sm py-2.5 rounded-xl flex items-center justify-center gap-2 " + btnBg}>
+                <MaskIcon /> Role Play
+              </button>
+              <button onClick={() => setShowMistakes(true)} className={"w-full text-sm py-2.5 rounded-xl flex items-center justify-center gap-2 " + btnBg}>
+                <AlertIcon /> Mistakes
+              </button>
+              <button onClick={() => setShowModeModal(true)} className={"w-full text-sm py-2.5 rounded-xl " + btnBg}>
+                Switch Mode
+              </button>
+              <button onClick={toggleTheme} className={"w-full text-sm py-2.5 rounded-xl flex items-center justify-center gap-2 " + btnBg}>
+                {isDark ? <SunIcon /> : <MoonIcon />}
+                {isDark ? "Light Mode" : "Dark Mode"}
               </button>
               <button onClick={handleLogout} className="w-full text-sm text-red-500 py-2 rounded-xl">Logout</button>
             </div>
           </div>
 
+          {/* Chat Area */}
           <div className="flex-1 flex flex-col relative">
             <div className={"h-14 border-b " + (isDark ? "border-neutral-800" : "border-gray-200") + " flex items-center justify-between px-4"}>
               <div className="flex items-center gap-2">
@@ -518,19 +623,16 @@
                   <div className="flex flex-col items-center gap-2">
                     {inputText && <div className={"w-full border rounded-xl px-4 py-2 text-sm text-center " + card}>{inputText}</div>}
                     <button onClick={toggleListening}
-                      className={"w-16 h-16 rounded-full flex items-center justify-center " + (isListening ? "bg-rose-500 text-white scale-110" : (isDark ? "bg-neutral-800" : "bg-gray-200"))}>
+                      className={"w-16 h-16 rounded-full flex items-center justify-center transition-all " + (isListening ? "bg-rose-500 text-white scale-110 shadow-lg shadow-rose-500/40" : (isDark ? "bg-neutral-800" : "bg-gray-200"))}>
                       <MicIcon size={28} />
                     </button>
                     <p className={"text-xs " + muted}>{micStatus || "Tap mic to speak"}</p>
                   </div>
                 ) : (
                   <form onSubmit={(e) => { e.preventDefault(); sendMessage(inputText); }} className="flex gap-2">
-                    <input
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
+                    <input value={inputText} onChange={(e) => setInputText(e.target.value)}
                       placeholder="Type your message..."
-                      className={"flex-1 border rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-rose-500 " + inputBg + " " + text}
-                    />
+                      className={"flex-1 border rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-rose-500 " + inputBg + " " + text} />
                     <button type="submit" className="bg-rose-500 text-white px-5 py-3 rounded-2xl text-sm font-medium">Send</button>
                   </form>
                 )}
