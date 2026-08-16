@@ -10,7 +10,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-black">
+<body>
   <div id="root"></div>
 
   <script type="text/babel">
@@ -39,6 +39,9 @@
     );
 
     function App() {
+      const [theme, setTheme] = useState(() => localStorage.getItem("fluento-theme") || "dark");
+      const isDark = theme === "dark";
+
       const [session, setSession] = useState(null);
       const [loading, setLoading] = useState(true);
       const [authError, setAuthError] = useState("");
@@ -58,17 +61,12 @@
       const [showVocabulary, setShowVocabulary] = useState(false);
       const [showSessionSummary, setShowSessionSummary] = useState(false);
 
-      // Progress
       const [currentStreak, setCurrentStreak] = useState(0);
       const [longestStreak, setLongestStreak] = useState(0);
       const [totalMessages, setTotalMessages] = useState(0);
       const [totalSessions, setTotalSessions] = useState(0);
-
-      // Vocabulary
       const [vocabList, setVocabList] = useState([]);
       const [newWord, setNewWord] = useState("");
-
-      // Session tracking
       const [sessionStartTime, setSessionStartTime] = useState(null);
       const [sessionMessageCount, setSessionMessageCount] = useState(0);
       const [sessionCorrections, setSessionCorrections] = useState(0);
@@ -94,6 +92,25 @@
       useEffect(() => { modeRef.current = mode; }, [mode]);
       useEffect(() => { isTypingRef.current = isTyping; }, [isTyping]);
 
+      // Theme
+      useEffect(() => {
+        localStorage.setItem("fluento-theme", theme);
+        document.body.className = isDark ? "bg-black" : "bg-gray-100";
+      }, [theme, isDark]);
+
+      const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
+
+      // Theme helper classes
+      const bg = isDark ? "bg-black" : "bg-gray-100";
+      const bgCard = isDark ? "bg-neutral-900" : "bg-white";
+      const bgInput = isDark ? "bg-neutral-900" : "bg-white";
+      const border = isDark ? "border-neutral-800" : "border-gray-200";
+      const text = isDark ? "text-white" : "text-gray-900";
+      const textMuted = isDark ? "text-neutral-400" : "text-gray-500";
+      const textMuted2 = isDark ? "text-neutral-500" : "text-gray-400";
+      const hoverBg = isDark ? "hover:bg-neutral-800" : "hover:bg-gray-100";
+      const sidebarBorder = isDark ? "border-neutral-800" : "border-gray-200";
+
       useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
           setSession(session);
@@ -104,7 +121,6 @@
             loadVocabulary(session);
           }
         });
-
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
           setSession(session);
           if (session) {
@@ -120,7 +136,6 @@
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, [messages, isTyping]);
 
-      // ========== LOAD DATA ==========
       const loadProgress = async (sess) => {
         try {
           const { data } = await supabase.from("user_progress").select("*").eq("user_id", sess.user.id).maybeSingle();
@@ -129,36 +144,24 @@
             setLongestStreak(data.longest_streak || 0);
             setTotalMessages(data.total_messages || 0);
             setTotalSessions(data.total_sessions || 0);
-            if (data.level) {
-              setLevel(data.level);
-              levelRef.current = data.level;
-            }
+            if (data.level) { setLevel(data.level); levelRef.current = data.level; }
           }
-        } catch (err) { console.error(err); }
+        } catch (err) {}
       };
 
       const loadVocabulary = async (sess) => {
         try {
-          const { data } = await supabase
-            .from("vocabulary")
-            .select("*")
-            .eq("user_id", sess.user.id)
-            .order("created_at", { ascending: false });
+          const { data } = await supabase.from("vocabulary").select("*").eq("user_id", sess.user.id).order("created_at", { ascending: false });
           setVocabList(data || []);
-        } catch (err) {
-          // Table might not exist yet
-          console.log("Vocabulary table not ready");
-        }
+        } catch (err) {}
       };
 
-      // ========== PROGRESS UPDATE ==========
       const updateProgress = async () => {
         if (!sessionRef.current) return;
         const today = new Date().toISOString().split("T")[0];
         try {
           const { data: progress } = await supabase.from("user_progress").select("*").eq("user_id", sessionRef.current.user.id).maybeSingle();
-          let newStreak = 1;
-          let newLongest = longestStreak;
+          let newStreak = 1, newLongest = longestStreak;
           let newTotalMessages = (progress?.total_messages || 0) + 1;
           let newTotalSessions = progress?.total_sessions || 0;
 
@@ -166,18 +169,15 @@
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayStr = yesterday.toISOString().split("T")[0];
-            if (progress.last_practice_date === today) {
-              newStreak = progress.current_streak || 1;
-            } else if (progress.last_practice_date === yesterdayStr) {
+            if (progress.last_practice_date === today) newStreak = progress.current_streak || 1;
+            else if (progress.last_practice_date === yesterdayStr) {
               newStreak = (progress.current_streak || 0) + 1;
               newTotalSessions += 1;
             } else {
               newStreak = 1;
               newTotalSessions += 1;
             }
-          } else {
-            newTotalSessions = 1;
-          }
+          } else newTotalSessions = 1;
 
           if (newStreak > (progress?.longest_streak || 0)) newLongest = newStreak;
           else newLongest = progress?.longest_streak || newStreak;
@@ -192,79 +192,56 @@
             level: levelRef.current,
             updated_at: new Date().toISOString()
           });
-
           setCurrentStreak(newStreak);
           setLongestStreak(newLongest);
           setTotalMessages(newTotalMessages);
           setTotalSessions(newTotalSessions);
-        } catch (err) { console.error(err); }
+        } catch (err) {}
       };
 
-      // ========== VOCABULARY ==========
-      const addToVocabulary = async (word, meaning = "") => {
+      const addToVocabulary = async (word) => {
         if (!sessionRef.current || !word.trim()) return;
         const cleanWord = word.trim().toLowerCase();
-        // Avoid duplicates
         if (vocabList.some(v => v.word.toLowerCase() === cleanWord)) return;
-
         try {
           const { data, error } = await supabase.from("vocabulary").insert({
             user_id: sessionRef.current.user.id,
             word: cleanWord,
-            meaning: meaning || "",
+            meaning: "",
             created_at: new Date().toISOString()
           }).select().single();
-
-          if (!error && data) {
-            setVocabList(prev => [data, ...prev]);
-          }
-        } catch (err) {
-          console.error("Add vocab error:", err);
-        }
+          if (!error && data) setVocabList(prev => [data, ...prev]);
+        } catch (err) {}
       };
 
       const removeFromVocabulary = async (id) => {
         try {
           await supabase.from("vocabulary").delete().eq("id", id);
           setVocabList(prev => prev.filter(v => v.id !== id));
-        } catch (err) { console.error(err); }
+        } catch (err) {}
       };
 
-      const handleAddWordManually = () => {
-        if (newWord.trim()) {
-          addToVocabulary(newWord);
-          setNewWord("");
-        }
-      };
-
-      // ========== PRONUNCIATION FEEDBACK ==========
       const getPronunciationFeedback = (confidence) => {
-        if (confidence >= 0.85) return { text: "Excellent clarity!", color: "text-emerald-400", emoji: "🌟" };
-        if (confidence >= 0.7) return { text: "Good pronunciation", color: "text-green-400", emoji: "👍" };
-        if (confidence >= 0.5) return { text: "Clear enough, try speaking a bit slower", color: "text-yellow-400", emoji: "🙂" };
-        return { text: "Try speaking more clearly and slowly", color: "text-orange-400", emoji: "🗣️" };
+        if (confidence >= 0.85) return { text: "Excellent clarity!", emoji: "🌟" };
+        if (confidence >= 0.7) return { text: "Good pronunciation", emoji: "👍" };
+        if (confidence >= 0.5) return { text: "Clear enough, try speaking a bit slower", emoji: "🙂" };
+        return { text: "Try speaking more clearly and slowly", emoji: "🗣️" };
       };
 
-      // ========== SPEECH RECOGNITION ==========
       const stripPunctuation = (text) => text.replace(/[.,!?;:"“”‘’()\[\]{}…]/g, "").replace(/\s+/g, " ").trim();
 
       useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-          setMicStatus("Speech recognition not supported. Please use Chrome.");
-          return;
-        }
+        if (!SpeechRecognition) return;
 
         const recognition = new SpeechRecognition();
         recognition.continuous = false;
         recognition.interimResults = true;
         recognition.lang = "en-US";
-        recognition.maxAlternatives = 1;
         let restartFailureCount = 0;
 
         const updateDisplay = () => {
-          const display = (committedTranscriptRef.current + " " + sessionFinalRef.current + " " + interimRef.current).replace(/\s+/g, " ").trim();
-          setInputText(display);
+          setInputText((committedTranscriptRef.current + " " + sessionFinalRef.current + " " + interimRef.current).replace(/\s+/g, " ").trim());
         };
 
         recognition.onstart = () => {
@@ -272,21 +249,15 @@
           setMicStatus("Listening… tap mic to stop & send");
           isRestartingRef.current = false;
           restartFailureCount = 0;
-          lastConfidenceRef.current = 0;
         };
 
         recognition.onresult = (event) => {
-          let interim = "";
-          let finalChunk = "";
-          let confidence = 0;
+          let interim = "", finalChunk = "", confidence = 0;
           for (let i = event.resultIndex; i < event.results.length; i++) {
-            const result = event.results[i];
-            if (result.isFinal) {
-              finalChunk += result[0].transcript;
-              confidence = result[0].confidence || 0.75;
-            } else {
-              interim += result[0].transcript;
-            }
+            if (event.results[i].isFinal) {
+              finalChunk += event.results[i][0].transcript;
+              confidence = event.results[i][0].confidence || 0.75;
+            } else interim += event.results[i][0].transcript;
           }
           if (finalChunk) {
             sessionFinalRef.current = stripPunctuation(finalChunk);
@@ -297,17 +268,11 @@
         };
 
         recognition.onerror = (event) => {
-          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          if (["not-allowed", "service-not-allowed", "audio-capture"].includes(event.error)) {
             permissionDeniedRef.current = true;
-            setMicStatus("Microphone permission denied");
-          } else if (event.error === "audio-capture") {
-            permissionDeniedRef.current = true;
-            setMicStatus("No microphone found");
-          } else if (event.error === "no-speech") {
-            setMicStatus("Listening… tap mic to stop & send");
-          } else if (event.error !== "aborted") {
-            setMicStatus("Error: " + event.error);
-          }
+            setMicStatus(event.error === "audio-capture" ? "No microphone found" : "Microphone permission denied");
+          } else if (event.error === "no-speech") setMicStatus("Listening… tap mic to stop & send");
+          else if (event.error !== "aborted") setMicStatus("Error: " + event.error);
         };
 
         recognition.onend = () => {
@@ -322,15 +287,12 @@
             isManualStopRef.current = false;
             const textToSend = committedTranscriptRef.current.trim();
             if (textToSend) {
-              // Pronunciation feedback
               const feedback = getPronunciationFeedback(lastConfidenceRef.current);
               setLastPronunciationFeedback(`${feedback.emoji} ${feedback.text}`);
               setInputText(textToSend);
               setIsReviewingVoice(true);
               setMicStatus("");
-            } else {
-              setMicStatus("No speech detected. Tap mic to try again.");
-            }
+            } else setMicStatus("No speech detected. Tap mic to try again.");
             return;
           }
 
@@ -340,12 +302,10 @@
             setTimeout(() => {
               try { recognitionRef.current.start(); }
               catch (e) {
-                restartFailureCount += 1;
+                restartFailureCount++;
                 if (restartFailureCount <= 3) {
                   setTimeout(() => {
-                    try { recognitionRef.current.start(); } catch (e2) {
-                      setMicStatus("Could not restart microphone");
-                    }
+                    try { recognitionRef.current.start(); } catch (e2) { setMicStatus("Could not restart microphone"); }
                   }, 300 * restartFailureCount);
                 } else setMicStatus("Could not restart microphone");
               }
@@ -363,9 +323,9 @@
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 0.95;
         const voices = window.speechSynthesis.getVoices();
-        let selectedVoice = voices.find(v => v.name.toLowerCase().includes("daniel") && (v.name.toLowerCase().includes("steady") || v.name.toLowerCase().includes("broadcaster")));
-        if (!selectedVoice) selectedVoice = voices.find(v => v.name.toLowerCase().includes("daniel"));
-        if (selectedVoice) utterance.voice = selectedVoice;
+        let v = voices.find(v => v.name.toLowerCase().includes("daniel") && (v.name.toLowerCase().includes("steady") || v.name.toLowerCase().includes("broadcaster")));
+        if (!v) v = voices.find(v => v.name.toLowerCase().includes("daniel"));
+        if (v) utterance.voice = v;
         window.speechSynthesis.speak(utterance);
       };
 
@@ -377,10 +337,7 @@
       }, []);
 
       const toggleListening = () => {
-        if (!recognitionRef.current) {
-          setMicStatus("Speech recognition not available");
-          return;
-        }
+        if (!recognitionRef.current) return setMicStatus("Speech recognition not available");
         if (isListening) {
           isManualStopRef.current = true;
           try { recognitionRef.current.stop(); } catch (e) {}
@@ -395,9 +352,7 @@
           isManualStopRef.current = false;
           isRestartingRef.current = false;
           setMicStatus("Listening…");
-          try { recognitionRef.current.start(); } catch (err) {
-            setMicStatus("Could not start microphone");
-          }
+          try { recognitionRef.current.start(); } catch (err) { setMicStatus("Could not start microphone"); }
         }
       };
 
@@ -425,7 +380,6 @@
         setTimeout(() => toggleListening(), 0);
       };
 
-      // ========== AUTH ==========
       const handleGoogleLogin = async () => {
         setAuthError("");
         setAuthLoading(true);
@@ -447,8 +401,6 @@
           permissionDeniedRef.current = true;
           try { recognitionRef.current.stop(); } catch (e) {}
         }
-        setIsReviewingVoice(false);
-        setInputText("");
         await supabase.auth.signOut();
         setSession(null);
         setMessages([]);
@@ -462,56 +414,28 @@
         setShowSessionSummary(false);
       };
 
-      const handleSelectLevel = (chosenLevel) => {
-        setLevel(chosenLevel);
-        setShowLevelModal(false);
-        setShowModeModal(true);
-      };
+      const handleSelectLevel = (l) => { setLevel(l); setShowLevelModal(false); setShowModeModal(true); };
 
-      const handleSelectMode = (chosenMode) => {
+      const handleSelectMode = (m) => {
         if (recognitionRef.current && isListening) {
           isManualStopRef.current = false;
           permissionDeniedRef.current = true;
           try { recognitionRef.current.stop(); } catch (e) {}
         }
-        setIsReviewingVoice(false);
-        setInputText("");
-        setMode(chosenMode);
+        setMode(m);
         setShowModeModal(false);
         setSessionStartTime(Date.now());
         setSessionMessageCount(0);
         setSessionCorrections(0);
-        setMessages([{
-          sender: "partner",
-          text: `Hey there! I'm your English speaking practice partner. You're in ${chosenMode === "voice" ? "Voice" : "Text"} mode at ${level} level. What's on your mind today?`,
-          correction: null
-        }]);
+        setMessages([{ sender: "partner", text: `Hey there! You're in ${m} mode at ${level} level. What's on your mind today?`, correction: null }]);
       };
 
-      const parseCorrection = (rawText) => {
-        if (!rawText.includes("CORRECTION:")) return { text: rawText, correction: null };
-        const parts = rawText.split("CORRECTION:");
-        const mainText = parts[0].trim();
-        const correctionPart = parts[1].trim();
-        const match = correctionPart.match(/(.+?)\s*→\s*(.+?)(?:\s*\((.+)\))?$/);
-        if (match) {
-          return {
-            text: mainText,
-            correction: {
-              original: match[1].trim(),
-              corrected: match[2].trim(),
-              tip: match[3] ? match[3].trim() : ""
-            }
-          };
-        }
-        return { text: rawText, correction: null };
-      };
-
-      // Auto-save words from corrections
-      const extractWordsFromCorrection = (correction) => {
-        if (!correction) return;
-        const words = (correction.corrected || "").split(/\s+/).filter(w => w.length > 3);
-        words.slice(0, 2).forEach(w => addToVocabulary(w.replace(/[^a-zA-Z]/g, "")));
+      const parseCorrection = (raw) => {
+        if (!raw.includes("CORRECTION:")) return { text: raw, correction: null };
+        const parts = raw.split("CORRECTION:");
+        const match = parts[1].trim().match(/(.+?)\s*→\s*(.+?)(?:\s*\((.+)\))?$/);
+        if (match) return { text: parts[0].trim(), correction: { original: match[1].trim(), corrected: match[2].trim(), tip: match[3] || "" } };
+        return { text: raw, correction: null };
       };
 
       const sendMessage = async (text) => {
@@ -528,84 +452,42 @@
         setIsTyping(true);
         isTypingRef.current = true;
         setSessionMessageCount(prev => prev + 1);
-
         updateProgress();
 
         try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-          const response = await fetch(WORKER_URL, {
+          const res = await fetch(WORKER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: sessionRef.current.user.id,
-              message: trimmed,
-              level: levelRef.current
-            }),
-            signal: controller.signal
+            body: JSON.stringify({ userId: sessionRef.current.user.id, message: trimmed, level: levelRef.current })
           });
-          clearTimeout(timeoutId);
-
-          const data = await response.json();
+          const data = await res.json();
           if (data.reply) {
             const parsed = parseCorrection(data.reply);
-            setMessages(prev => [...prev, {
-              sender: "partner",
-              text: parsed.text,
-              correction: parsed.correction
-            }]);
+            setMessages(prev => [...prev, { sender: "partner", text: parsed.text, correction: parsed.correction }]);
             if (parsed.correction) {
               setSessionCorrections(prev => prev + 1);
-              extractWordsFromCorrection(parsed.correction);
+              (parsed.correction.corrected || "").split(/\s+/).filter(w => w.length > 3).slice(0, 2).forEach(w => addToVocabulary(w.replace(/[^a-zA-Z]/g, "")));
             }
             if (modeRef.current === "voice") speakText(parsed.text);
-          } else {
-            setMessages(prev => [...prev, {
-              sender: "partner",
-              text: "Sorry, I had trouble understanding. Can you try again?",
-              correction: null
-            }]);
           }
         } catch (err) {
-          setMessages(prev => [...prev, {
-            sender: "partner",
-            text: err.name === "AbortError" ? "That took too long to respond. Please try again." : "Connection problem. Please try again.",
-            correction: null
-          }]);
+          setMessages(prev => [...prev, { sender: "partner", text: "Connection problem. Please try again.", correction: null }]);
         }
         setIsTyping(false);
         isTypingRef.current = false;
       };
 
-      const handleSendMessage = (e) => {
-        if (e) e.preventDefault();
-        sendMessage(inputText);
-      };
-
-      const handleKeyDown = (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage(inputText);
-        }
-      };
-
-      const endSession = () => {
-        setShowSessionSummary(true);
-      };
-
-      // ========== RENDER ==========
-      if (loading) return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
+      if (loading) return <div className={`h-screen ${bg} flex items-center justify-center ${text}`}>Loading...</div>;
 
       if (!session) {
         return (
-          <div className="min-h-screen bg-black flex items-center justify-center p-4">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 w-full max-w-md text-center">
+          <div className={`min-h-screen ${bg} flex items-center justify-center p-4`}>
+            <div className={`${bgCard} border ${border} rounded-3xl p-8 w-full max-w-md text-center`}>
               <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white"><MicIcon /></div>
-              <h1 className="text-2xl font-semibold text-white mb-1">Fluento</h1>
-              <p className="text-neutral-400 text-sm mb-8">English Speaking Partner</p>
+              <h1 className={`text-2xl font-semibold ${text} mb-1`}>Fluento</h1>
+              <p className={`${textMuted} text-sm mb-8`}>English Speaking Partner</p>
               {authError && <div className="text-red-400 text-sm mb-4">{authError}</div>}
-              <button onClick={handleGoogleLogin} disabled={authLoading} className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3.5 rounded-xl">
+              <button onClick={handleGoogleLogin} disabled={authLoading} className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3.5 rounded-xl border border-gray-200">
                 <GoogleIcon /> {authLoading ? "Redirecting..." : "Continue with Google"}
               </button>
             </div>
@@ -615,76 +497,48 @@
 
       // Session Summary
       if (showSessionSummary) {
-        const durationMin = sessionStartTime ? Math.max(1, Math.round((Date.now() - sessionStartTime) / 60000)) : 1;
+        const mins = sessionStartTime ? Math.max(1, Math.round((Date.now() - sessionStartTime) / 60000)) : 1;
         return (
-          <div className="min-h-screen bg-black text-white p-4 flex items-center justify-center">
-            <div className="max-w-md w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 text-center">
+          <div className={`min-h-screen ${bg} ${text} p-4 flex items-center justify-center`}>
+            <div className={`max-w-md w-full ${bgCard} border ${border} rounded-3xl p-8 text-center`}>
               <div className="text-4xl mb-4">🎉</div>
               <h2 className="text-2xl font-bold mb-2">Session Complete!</h2>
-              <p className="text-neutral-400 text-sm mb-8">Great job practicing today</p>
-
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-black/40 rounded-2xl p-4">
-                  <div className="text-2xl font-bold text-rose-400">{sessionMessageCount}</div>
-                  <div className="text-xs text-neutral-400">Messages</div>
-                </div>
-                <div className="bg-black/40 rounded-2xl p-4">
-                  <div className="text-2xl font-bold text-orange-400">{durationMin}m</div>
-                  <div className="text-xs text-neutral-400">Duration</div>
-                </div>
-                <div className="bg-black/40 rounded-2xl p-4">
-                  <div className="text-2xl font-bold text-emerald-400">{sessionCorrections}</div>
-                  <div className="text-xs text-neutral-400">Corrections</div>
-                </div>
-                <div className="bg-black/40 rounded-2xl p-4">
-                  <div className="text-2xl font-bold text-yellow-400">🔥 {currentStreak}</div>
-                  <div className="text-xs text-neutral-400">Streak</div>
-                </div>
+              <div className="grid grid-cols-2 gap-4 my-8">
+                <div className={`${isDark ? "bg-black/40" : "bg-gray-50"} rounded-2xl p-4`}><div className="text-2xl font-bold text-rose-500">{sessionMessageCount}</div><div className="text-xs text-gray-500">Messages</div></div>
+                <div className={`${isDark ? "bg-black/40" : "bg-gray-50"} rounded-2xl p-4`}><div className="text-2xl font-bold text-orange-500">{mins}m</div><div className="text-xs text-gray-500">Duration</div></div>
+                <div className={`${isDark ? "bg-black/40" : "bg-gray-50"} rounded-2xl p-4`}><div className="text-2xl font-bold text-emerald-500">{sessionCorrections}</div><div className="text-xs text-gray-500">Corrections</div></div>
+                <div className={`${isDark ? "bg-black/40" : "bg-gray-50"} rounded-2xl p-4`}><div className="text-2xl font-bold text-yellow-500">🔥 {currentStreak}</div><div className="text-xs text-gray-500">Streak</div></div>
               </div>
-
-              <button onClick={() => { setShowSessionSummary(false); setShowModeModal(true); }} className="w-full bg-rose-500 hover:bg-rose-600 py-3 rounded-2xl font-medium mb-3">
-                Practice Again
-              </button>
-              <button onClick={() => { setShowSessionSummary(false); setShowDashboard(true); }} className="w-full bg-neutral-800 hover:bg-neutral-700 py-3 rounded-2xl text-sm">
-                View Full Progress
-              </button>
+              <button onClick={() => { setShowSessionSummary(false); setShowModeModal(true); }} className="w-full bg-rose-500 text-white py-3 rounded-2xl font-medium mb-3">Practice Again</button>
+              <button onClick={() => { setShowSessionSummary(false); setShowDashboard(true); }} className={`w-full ${isDark ? "bg-neutral-800" : "bg-gray-200"} py-3 rounded-2xl text-sm`}>View Progress</button>
             </div>
           </div>
         );
       }
 
-      // Vocabulary Builder
+      // Vocabulary
       if (showVocabulary) {
         return (
-          <div className="min-h-screen bg-black text-white p-4">
+          <div className={`min-h-screen ${bg} ${text} p-4`}>
             <div className="max-w-lg mx-auto">
               <div className="flex items-center justify-between mb-6">
-                <button onClick={() => setShowVocabulary(false)} className="text-neutral-400 text-sm">← Back</button>
-                <h1 className="text-xl font-semibold">Vocabulary Builder</h1>
+                <button onClick={() => setShowVocabulary(false)} className={`${textMuted} text-sm`}>← Back</button>
+                <h1 className="text-xl font-semibold">Vocabulary</h1>
                 <div className="w-10"></div>
               </div>
-
               <div className="flex gap-2 mb-6">
-                <input value={newWord} onChange={(e) => setNewWord(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAddWordManually()}
-                  placeholder="Add a new word..." className="flex-1 bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-rose-500" />
-                <button onClick={handleAddWordManually} className="bg-rose-500 hover:bg-rose-600 px-5 rounded-xl text-sm font-medium">Add</button>
+                <input value={newWord} onChange={e => setNewWord(e.target.value)} onKeyDown={e => e.key === "Enter" && newWord.trim() && (addToVocabulary(newWord), setNewWord(""))}
+                  placeholder="Add a word..." className={`flex-1 ${bgInput} border ${border} rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-rose-500 ${text}`} />
+                <button onClick={() => { addToVocabulary(newWord); setNewWord(""); }} className="bg-rose-500 text-white px-5 rounded-xl text-sm">Add</button>
               </div>
-
               {vocabList.length === 0 ? (
-                <div className="text-center text-neutral-500 py-16">
-                  <div className="text-4xl mb-3">📚</div>
-                  <p>No words saved yet</p>
-                  <p className="text-sm mt-1">Words from corrections will appear here automatically</p>
-                </div>
+                <div className={`text-center ${textMuted2} py-16`}div className="text-4xl mb-3">📚</div><p>No words yet</p></div>
               ) : (
                 <div className="space-y-3">
                   {vocabList.map(item => (
-                    <div key={item.id} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex justify-between items-center">
-                      <div>
-                        <div className="font-medium capitalize">{item.word}</div>
-                        {item.meaning && <div className="text-xs text-neutral-400 mt-0.5">{item.meaning}</div>}
-                      </div>
-                      <button onClick={() => removeFromVocabulary(item.id)} className="text-neutral-500 hover:text-red-400 text-sm">✕</button>
+                    <div key={item.id} className={`${bgCard} border ${border} rounded-2xl p-4 flex justify-between items-center`}>
+                      <div className="font-medium capitalize">{item.word}</div>
+                      <button onClick={() => removeFromVocabulary(item.id)} className="text-gray-400 hover:text-red-500 text-sm">✕</button>
                     </div>
                   ))}
                 </div>
@@ -694,41 +548,27 @@
         );
       }
 
-      // Progress Dashboard
+      // Dashboard
       if (showDashboard) {
         return (
-          <div className="min-h-screen bg-black text-white p-4">
+          <div className={`min-h-screen ${bg} ${text} p-4`}>
             <div className="max-w-lg mx-auto">
               <div className="flex items-center justify-between mb-8">
-                <button onClick={() => setShowDashboard(false)} className="text-neutral-400 text-sm">← Back</button>
-                <h1 className="text-xl font-semibold">Your Progress</h1>
+                <button onClick={() => setShowDashboard(false)} className={`${textMuted} text-sm`}>← Back</button>
+                <h1 className="text-xl font-semibold">Progress</h1>
                 <div className="w-10"></div>
               </div>
-
               <div className="bg-gradient-to-br from-orange-500/20 to-rose-500/10 border border-orange-500/30 rounded-3xl p-6 mb-6 text-center">
                 <div className="text-5xl mb-2">🔥</div>
                 <div className="text-4xl font-bold mb-1">{currentStreak}</div>
-                <div className="text-orange-400 font-medium">Day Streak</div>
-                <div className="text-sm text-neutral-400 mt-2">Best: {longestStreak} days</div>
+                <div className="text-orange-500 font-medium">Day Streak</div>
+                <div className={`text-sm ${textMuted} mt-2`}>Best: {longestStreak} days</div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 text-center">
-                  <div className="text-2xl font-bold">{totalMessages}</div>
-                  <div className="text-xs text-neutral-400 mt-1">Messages</div>
-                </div>
-                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 text-center">
-                  <div className="text-2xl font-bold">{totalSessions}</div>
-                  <div className="text-xs text-neutral-400 mt-1">Practice Days</div>
-                </div>
-                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 text-center">
-                  <div className="text-2xl font-bold text-rose-400">{level || "-"}</div>
-                  <div className="text-xs text-neutral-400 mt-1">Level</div>
-                </div>
-                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 text-center">
-                  <div className="text-2xl font-bold text-emerald-400">{vocabList.length}</div>
-                  <div className="text-xs text-neutral-400 mt-1">Words Saved</div>
-                </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className={`${bgCard} border ${border} rounded-2xl p-5 text-center`}div className="text-2xl font-bold">{totalMessages}</div><div className={`text-xs ${textMuted}`}>Messages</div></div>
+                <div className={`${bgCard} border ${border} rounded-2xl p-5 text-center`}div className="text-2xl font-bold">{totalSessions}</div><div className={`text-xs ${textMuted}`}>Practice Days</div></div>
+                <div className={`${bgCard} border ${border} rounded-2xl p-5 text-center`}div className="text-2xl font-bold text-rose-500">{level || "-"}</div><div className={`text-xs ${textMuted}`}>Level</div></div>
+                <div className={`${bgCard} border ${border} rounded-2xl p-5 text-center`}div className="text-2xl font-bold text-emerald-500">{vocabList.length}</div><div className={`text-xs ${textMuted}`}>Words</div></div>
               </div>
             </div>
           </div>
@@ -737,18 +577,12 @@
 
       if (showLevelModal) {
         return (
-          <div className="min-h-screen bg-black flex items-center justify-center p-4">
-            <div className="bg-black border border-neutral-800 rounded-3xl max-w-md w-full p-8 text-center">
-              <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white"><MicIcon /></div>
-              <h2 className="text-2xl font-semibold mb-2 text-white">Choose Your Level</h2>
-              <p className="text-neutral-400 text-sm mb-8">Select your current English level</p>
-              <div className="space-y-3">
-                {["Beginner", "Intermediate", "Advanced"].map(l => (
-                  <button key={l} onClick={() => handleSelectLevel(l)} className="w-full py-4 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white">
-                    {l}
-                  </button>
-                ))}
-              </div>
+          <div className={`min-h-screen ${bg} flex items-center justify-center p-4`}>
+            <div className={`${bgCard} border ${border} rounded-3xl max-w-md w-full p-8 text-center`}>
+              <h2 className={`text-2xl font-semibold mb-6 ${text}`}>Choose Your Level</h2>
+              {["Beginner", "Intermediate", "Advanced"].map(l => (
+                <button key={l} onClick={() => handleSelectLevel(l)} className={`w-full py-4 mb-3 ${isDark ? "bg-neutral-900 hover:bg-neutral-800 border-neutral-800" : "bg-gray-50 hover:bg-gray-100 border-gray-200"} border rounded-2xl ${text} text-left px-5`}>{l}</button>
+              ))}
             </div>
           </div>
         );
@@ -756,120 +590,117 @@
 
       if (showModeModal) {
         return (
-          <div className="min-h-screen bg-black flex items-center justify-center p-4">
-            <div className="bg-black border border-neutral-800 rounded-3xl max-w-md w-full p-8 text-center">
-              <h2 className="text-2xl font-semibold mb-2 text-white">How do you want to practice?</h2>
-              <p className="text-neutral-400 text-sm mb-8">Choose your preferred way</p>
-              <div className="space-y-4">
-                <button onClick={() => handleSelectMode("voice")} className="w-full py-5 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white">
-                  <div className="font-medium text-lg">Speak with AI</div>
-                  <div className="text-sm text-neutral-400">Tap mic to speak • AI replies with voice</div>
-                </button>
-                <button onClick={() => handleSelectMode("text")} className="w-full py-5 px-5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 rounded-2xl text-left text-white">
-                  <div className="font-medium text-lg">Chat with Samim</div>
-                  <div className="text-sm text-neutral-400">Type messages • Get text replies</div>
-                </button>
-              </div>
+          <div className={`min-h-screen ${bg} flex items-center justify-center p-4`}>
+            <div className={`${bgCard} border ${border} rounded-3xl max-w-md w-full p-8 text-center`}>
+              <h2 className={`text-2xl font-semibold mb-6 ${text}`}>Choose Mode</h2>
+              <button onClick={() => handleSelectMode("voice")} className={`w-full py-5 mb-3 ${isDark ? "bg-neutral-900 border-neutral-800" : "bg-gray-50 border-gray-200"} border rounded-2xl ${text} text-left px-5`}>
+                <div className="font-medium text-lg">Speak with AI</div>
+                <div className={`text-sm ${textMuted}`}>Tap mic • AI replies with voice</div>
+              </button>
+              <button onClick={() => handleSelectMode("text")} className={`w-full py-5 ${isDark ? "bg-neutral-900 border-neutral-800" : "bg-gray-50 border-gray-200"} border rounded-2xl ${text} text-left px-5`}>
+                <div className="font-medium text-lg">Chat with Samim</div>
+                <div className={`text-sm ${textMuted}`}>Type messages</div>
+              </button>
             </div>
           </div>
         );
       }
 
-      // Main Chat
+      // Main App
       return (
-        <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
-          <div className="w-64 border-r border-neutral-800 hidden md:flex flex-col justify-between p-6">
+        <div className={`flex h-screen ${bg} ${text} overflow-hidden`}>
+          {/* Sidebar */}
+          <div className={`w-64 border-r ${sidebarBorder} hidden md:flex flex-col justify-between p-6`}>
             <div>
               <div className="flex items-center gap-3 mb-8">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 flex items-center justify-center"><MicIcon size={20} /></div>
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 flex items-center justify-center text-white"><MicIcon size={20} /></div>
                 <span className="font-semibold">Fluento</span>
               </div>
-              <div className="text-xs text-neutral-500 mb-1">Logged in as</div>
-              <div className="text-sm text-neutral-300 truncate mb-6">{session.user.email}</div>
+              <div className={`text-xs ${textMuted2} mb-1`}>Logged in as</div>
+              <div className={`text-sm truncate mb-6 ${textMuted}`}>{session.user.email}</div>
 
               <div className="bg-gradient-to-br from-orange-500/20 to-rose-500/10 border border-orange-500/30 rounded-2xl p-4 mb-4">
-                <div className="text-xs text-orange-400 mb-1">Daily Streak</div>
-                <div className="text-2xl font-bold">🔥 {currentStreak} <span className="text-sm font-normal text-neutral-400">days</span></div>
+                <div className="text-xs text-orange-500 mb-1">Daily Streak</div>
+                <div className="text-2xl font-bold">🔥 {currentStreak}</div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4">
-                <div className="text-xs text-neutral-500">Level</div>
-                <div className="text-sm text-rose-400">{level}</div>
-              </div>
-              <button onClick={() => setShowDashboard(true)} className="w-full text-sm bg-neutral-800 hover:bg-neutral-700 py-2.5 rounded-xl">📊 Progress</button>
-              <button onClick={() => setShowVocabulary(true)} className="w-full text-sm bg-neutral-800 hover:bg-neutral-700 py-2.5 rounded-xl">📚 Vocabulary</button>
-              <button onClick={endSession} className="w-full text-sm bg-neutral-800 hover:bg-neutral-700 py-2.5 rounded-xl">📋 End Session</button>
-              <button onClick={() => setShowModeModal(true)} className="w-full text-sm bg-neutral-800 hover:bg-neutral-700 py-2 rounded-xl">Change Mode</button>
-              <button onClick={handleLogout} className="w-full text-sm text-red-400 hover:bg-red-950/30 py-2 rounded-xl">Logout</button>
+              <button onClick={() => setShowDashboard(true)} className={`w-full text-sm ${isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300"} py-2.5 rounded-xl`}>📊 Progress</button>
+              <button onClick={() => setShowVocabulary(true)} className={`w-full text-sm ${isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300"} py-2.5 rounded-xl`}>📚 Vocabulary</button>
+              <button onClick={() => setShowSessionSummary(true)} className={`w-full text-sm ${isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300"} py-2.5 rounded-xl`}>📋 End Session</button>
+              <button onClick={() => setShowModeModal(true)} className={`w-full text-sm ${isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300"} py-2 rounded-xl`}>Change Mode</button>
+              
+              {/* Theme Toggle */}
+              <button onClick={toggleTheme} className={`w-full text-sm ${isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300"} py-2.5 rounded-xl flex items-center justify-center gap-2`}>
+                {isDark ? "☀️ Light Mode" : "🌙 Dark Mode"}
+              </button>
+
+              <button onClick={handleLogout} className="w-full text-sm text-red-500 py-2 rounded-xl">Logout</button>
             </div>
           </div>
 
+          {/* Chat Area */}
           <div className="flex-1 flex flex-col relative">
-            <div className="h-16 border-b border-neutral-800 flex items-center justify-between px-6">
+            <div className={`h-16 border-b ${border} flex items-center justify-between px-6`}>
               <div className="flex items-center gap-3">
                 <div className="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></div>
                 <span className="text-sm">Live Practice</span>
               </div>
               <div className="flex items-center gap-3">
-                {currentStreak > 0 && <span className="text-xs bg-orange-500/20 text-orange-400 px-2.5 py-1 rounded-full">🔥 {currentStreak}</span>}
-                <span className="text-xs px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800">{level} · {mode}</span>
+                {currentStreak > 0 && <span className="text-xs bg-orange-500/20 text-orange-500 px-2.5 py-1 rounded-full">🔥 {currentStreak}</span>}
+                <span className={`text-xs px-3 py-1 rounded-full ${bgCard} border ${border}`}>{level} · {mode}</span>
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto pt-6 pb-40 px-4 md:px-8 space-y-6 max-w-3xl mx-auto w-full">
               {messages.map((msg, idx) => (
                 <div key={idx} className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}>
-                  <div className={`max-w-xl rounded-2xl px-4 py-3 text-sm ${msg.sender === "user" ? "bg-rose-500 text-white rounded-br-sm" : "bg-neutral-900 border border-neutral-800 rounded-bl-sm"}`}>
+                  <div className={`max-w-xl rounded-2xl px-4 py-3 text-sm \( {msg.sender === "user" ? "bg-rose-500 text-white rounded-br-sm" : ` \){bgCard} border ${border} rounded-bl-sm`}`}>
                     {msg.text}
                   </div>
                   {msg.correction && (
-                    <div className="mt-3 max-w-xl w-full bg-neutral-900 border border-rose-900/40 rounded-2xl p-4 text-sm">
-                      <div className="font-semibold text-rose-400 mb-2">🔧 Gentle Correction</div>
-                      <div className="text-neutral-500 line-through mb-1">"{msg.correction.original}"</div>
-                      <div className="text-emerald-400 font-medium mb-2">→ "{msg.correction.corrected}"</div>
-                      {msg.correction.tip && <div className="text-neutral-300 text-xs bg-black/40 p-2.5 rounded-xl">💡 {msg.correction.tip}</div>}
+                    <div className={`mt-3 max-w-xl w-full ${bgCard} border border-rose-300/40 rounded-2xl p-4 text-sm`}>
+                      <div className="font-semibold text-rose-500 mb-2">🔧 Gentle Correction</div>
+                      <div className={`${textMuted} line-through mb-1`}>"{msg.correction.original}"</div>
+                      <div className="text-emerald-500 font-medium mb-2">→ "{msg.correction.corrected}"</div>
+                      {msg.correction.tip && <div className={`text-xs ${isDark ? "bg-black/40" : "bg-gray-50"} p-2.5 rounded-xl`}>💡 {msg.correction.tip}</div>}
                     </div>
                   )}
                 </div>
               ))}
-              {isTyping && <div className="text-neutral-500 text-sm">Partner is speaking...</div>}
+              {isTyping && <div className={`${textMuted} text-sm`}>Partner is speaking...</div>}
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-black border-t border-neutral-800">
+            <div className={`absolute bottom-0 left-0 right-0 p-4 ${bg} border-t ${border}`}>
               <div className="max-w-3xl mx-auto">
                 {mode === "voice" ? (
                   isReviewingVoice ? (
                     <div className="flex flex-col gap-3">
-                      {lastPronunciationFeedback && (
-                        <div className="text-center text-sm text-emerald-400 bg-emerald-950/30 border border-emerald-800/40 rounded-xl py-2">
-                          {lastPronunciationFeedback}
-                        </div>
-                      )}
-                      <textarea value={inputText} onChange={(e) => setInputText(e.target.value)} rows={2} autoFocus
-                        className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-rose-500 resize-none" />
+                      {lastPronunciationFeedback && <div className="text-center text-sm text-emerald-500 py-2">{lastPronunciationFeedback}</div>}
+                      <textarea value={inputText} onChange={e => setInputText(e.target.value)} rows={2} autoFocus
+                        className={`w-full ${bgInput} border ${border} rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-rose-500 resize-none ${text}`} />
                       <div className="flex gap-2">
-                        <button onClick={handleDiscardVoiceReview} className="flex-1 py-3 rounded-2xl bg-neutral-800 text-sm">Discard</button>
-                        <button onClick={handleRetryVoiceReview} className="flex-1 py-3 rounded-2xl bg-neutral-800 text-sm flex items-center justify-center gap-1"><MicIcon size={16} /> Re-record</button>
-                        <button onClick={handleSendVoiceReview} disabled={!inputText.trim()} className="flex-1 py-3 rounded-2xl bg-rose-500 text-sm font-medium disabled:opacity-40">Send</button>
+                        <button onClick={handleDiscardVoiceReview} className={`flex-1 py-3 rounded-2xl ${isDark ? "bg-neutral-800" : "bg-gray-200"} text-sm`}>Discard</button>
+                        <button onClick={handleRetryVoiceReview} className={`flex-1 py-3 rounded-2xl ${isDark ? "bg-neutral-800" : "bg-gray-200"} text-sm flex items-center justify-center gap-1`}><MicIcon size={16} /> Re-record</button>
+                        <button onClick={handleSendVoiceReview} disabled={!inputText.trim()} className="flex-1 py-3 rounded-2xl bg-rose-500 text-white text-sm font-medium disabled:opacity-40">Send</button>
                       </div>
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-3">
-                      {inputText && <div className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-2.5 text-sm text-center">{inputText}</div>}
-                      <button onClick={toggleListening} className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${isListening ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50" : "bg-neutral-800"}`}>
-                        <MicIcon size={32} className={isListening ? "text-white" : "text-neutral-300"} />
+                      {inputText && <div className={`w-full ${bgCard} border ${border} rounded-xl px-4 py-2.5 text-sm text-center`}>{inputText}</div>}
+                      <button onClick={toggleListening} className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${isListening ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50 text-white" : isDark ? "bg-neutral-800 text-neutral-300" : "bg-gray-200 text-gray-600"}`}>
+                        <MicIcon size={32} />
                       </button>
-                      <p className="text-xs text-neutral-400">{micStatus || "Tap the mic to speak"}</p>
+                      <p className={`text-xs ${textMuted}`}>{micStatus || "Tap the mic to speak"}</p>
                     </div>
                   )
                 ) : (
-                  <form onSubmit={handleSendMessage} className="flex gap-3">
-                    <input value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={handleKeyDown}
-                      placeholder="Type your message..." className="flex-1 bg-neutral-900 border border-neutral-700 rounded-2xl px-5 py-3 focus:outline-none focus:border-rose-500" />
-                    <button type="submit" className="bg-rose-500 hover:bg-rose-600 px-6 py-3 rounded-2xl font-medium">Send</button>
+                  <form onSubmit={e => { e.preventDefault(); sendMessage(inputText); }} className="flex gap-3">
+                    <input value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage(inputText))}
+                      placeholder="Type your message..." className={`flex-1 ${bgInput} border ${border} rounded-2xl px-5 py-3 focus:outline-none focus:border-rose-500 ${text}`} />
+                    <button type="submit" className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-2xl font-medium">Send</button>
                   </form>
                 )}
               </div>
