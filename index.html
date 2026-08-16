@@ -121,8 +121,8 @@
 
       const messagesEndRef = useRef(null);
       const recognitionRef = useRef(null);
-      const finalTextRef = useRef("");
-      const isManualStopRef = useRef(false);
+      const transcriptRef = useRef("");          // final clean text
+      const isStoppingRef = useRef(false);
       const sessionRef = useRef(session);
       const levelRef = useRef(level);
       const modeRef = useRef(mode);
@@ -189,52 +189,70 @@
         } catch (e) {}
       };
 
-      // Speech Recognition - Manual control only
+      // ========== FIXED SPEECH RECOGNITION ==========
       useEffect(() => {
-        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SR) return;
-        const recognition = new SR();
-        recognition.continuous = true;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;          // IMPORTANT: false prevents repeating
         recognition.interimResults = true;
         recognition.lang = "en-US";
+        recognition.maxAlternatives = 1;
 
         recognition.onstart = () => {
           setIsListening(true);
           setMicStatus("Listening... Tap mic again to send");
+          transcriptRef.current = "";
         };
 
-        recognition.onresult = (e) => {
-          let final = "";
+        recognition.onresult = (event) => {
           let interim = "";
-          for (let i = 0; i < e.results.length; i++) {
-            if (e.results[i].isFinal) {
-              final += e.results[i][0].transcript + " ";
+          let final = "";
+
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const result = event.results[i];
+            if (result.isFinal) {
+              final += result[0].transcript;
             } else {
-              interim += e.results[i][0].transcript;
+              interim += result[0].transcript;
             }
           }
-          finalTextRef.current = final.trim();
-          setInputText((final + interim).trim());
+
+          if (final) {
+            transcriptRef.current = final.trim();
+            setInputText(final.trim());
+          } else if (interim) {
+            setInputText(interim.trim());
+          }
         };
 
-        recognition.onerror = (e) => {
-          if (e.error !== "aborted") {
-            setIsListening(false);
-            if (e.error === "not-allowed") setMicStatus("Microphone permission denied");
-            else setMicStatus("Error: " + e.error);
+        recognition.onerror = (event) => {
+          setIsListening(false);
+          if (event.error === "not-allowed") {
+            setMicStatus("Microphone permission denied");
+          } else if (event.error === "no-speech") {
+            setMicStatus("No speech detected. Try again.");
+          } else if (event.error !== "aborted") {
+            setMicStatus("Error: " + event.error);
           }
         };
 
         recognition.onend = () => {
           setIsListening(false);
-          if (isManualStopRef.current) {
-            isManualStopRef.current = false;
-            const text = (finalTextRef.current || inputText || "").trim();
+
+          // Only send if user intentionally stopped
+          if (isStoppingRef.current) {
+            isStoppingRef.current = false;
+            const text = (transcriptRef.current || "").trim();
             if (text) {
               setMicStatus("Sending...");
-              setTimeout(() => sendMessage(text), 150);
+              setTimeout(() => {
+                sendMessage(text);
+              }, 200);
             } else {
               setMicStatus("No speech detected");
+              setInputText("");
             }
           }
         };
@@ -244,23 +262,25 @@
 
       const toggleListening = () => {
         if (!recognitionRef.current) {
-          setMicStatus("Speech not supported. Use Chrome.");
+          setMicStatus("Speech recognition not supported. Use Chrome.");
           return;
         }
 
         if (isListening) {
-          // User tapped to stop → send
-          isManualStopRef.current = true;
-          try { recognitionRef.current.stop(); } catch(e) {}
+          // User wants to stop and send
+          isStoppingRef.current = true;
+          try {
+            recognitionRef.current.stop();
+          } catch (e) {}
         } else {
           // Start listening
-          finalTextRef.current = "";
+          transcriptRef.current = "";
           setInputText("");
-          isManualStopRef.current = false;
+          isStoppingRef.current = false;
           setMicStatus("Listening...");
           try {
             recognitionRef.current.start();
-          } catch(e) {
+          } catch (e) {
             setMicStatus("Could not start microphone");
           }
         }
@@ -334,7 +354,8 @@
 
         setInputText("");
         setMicStatus("");
-        finalTextRef.current = "";
+        transcriptRef.current = "";
+
         setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
         setIsTyping(true);
         isTypingRef.current = true;
@@ -373,7 +394,6 @@
               correction: parsed.correction,
               canPlay: true
             }]);
-            // Auto speak only in voice mode
             if (modeRef.current === "voice") {
               speakText(parsed.text);
             }
@@ -386,7 +406,6 @@
       };
 
       // ========== RENDER ==========
-
       if (loading) {
         return <div className={"h-screen " + bg + " flex items-center justify-center " + text}>Loading...</div>;
       }
@@ -526,7 +545,6 @@
         );
       }
 
-      // Sidebar content (reused for desktop + mobile)
       const SidebarContent = () => (
         <>
           <div>
@@ -584,7 +602,7 @@
             <SidebarContent />
           </div>
 
-          {/* Mobile Menu Overlay */}
+          {/* Mobile Menu */}
           {showMobileMenu && (
             <div className="fixed inset-0 z-50 md:hidden">
               <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileMenu(false)}></div>
@@ -594,7 +612,7 @@
             </div>
           )}
 
-          {/* Main Chat */}
+          {/* Chat Area */}
           <div className="flex-1 flex flex-col relative">
             <div className={"h-14 border-b " + (isDark ? "border-neutral-800" : "border-gray-200") + " flex items-center justify-between px-4"}>
               <div className="flex items-center gap-3">
@@ -616,10 +634,9 @@
                   <div className={"max-w-[85%] rounded-2xl px-4 py-3 text-sm " + (msg.sender === "user" ? "bg-rose-500 text-white" : card + " border")}>
                     {msg.text}
                   </div>
-                  {/* Tap to Play button for AI messages */}
                   {msg.sender === "partner" && msg.canPlay && (
                     <button onClick={() => speakText(msg.text)}
-                      className="mt-2 flex items-center gap-2 px-4 py-2 rounded-full bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium shadow-lg shadow-purple-600/30 transition">
+                      className="mt-2 flex items-center gap-2 px-4 py-2 rounded-full bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium">
                       <PlayIcon /> Tap to Play
                     </button>
                   )}
@@ -634,7 +651,9 @@
                 {mode === "voice" ? (
                   <div className="flex flex-col items-center gap-2">
                     {inputText && (
-                      <div className={"w-full border rounded-xl px-4 py-2 text-sm text-center " + card}>{inputText}</div>
+                      <div className={"w-full border rounded-xl px-4 py-2 text-sm text-center " + card}>
+                        {inputText}
+                      </div>
                     )}
                     <button onClick={toggleListening}
                       className={"w-16 h-16 rounded-full flex items-center justify-center transition-all " + (isListening ? "bg-rose-500 text-white scale-110 shadow-lg shadow-rose-500/40" : (isDark ? "bg-neutral-800" : "bg-gray-200"))}>
