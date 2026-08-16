@@ -21,20 +21,27 @@
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const WORKER_URL = "https://morning-bonus-5828.imsamimmandal601.workers.dev";
 
+    const ROLE_PLAYS = [
+      { id: "interview", title: "Job Interview", desc: "Practice common interview questions", prompt: "You are a professional job interviewer. Ask relevant interview questions one by one and give feedback." },
+      { id: "travel", title: "Travel & Airport", desc: "Airport, hotel, directions", prompt: "You are a helpful person at an airport/hotel. Help the user practice travel English." },
+      { id: "shopping", title: "Shopping", desc: "Buy clothes, food, bargain", prompt: "You are a shopkeeper. Help the user practice shopping conversations." },
+      { id: "daily", title: "Daily Conversation", desc: "Casual daily English", prompt: "You are a friendly person. Have a natural daily conversation with the user." },
+      { id: "doctor", title: "Doctor Visit", desc: "Explain symptoms, understand advice", prompt: "You are a doctor. Help the user practice explaining health problems." },
+      { id: "restaurant", title: "Restaurant", desc: "Order food, ask questions", prompt: "You are a waiter in a restaurant. Help the user practice ordering food." }
+    ];
+
     const MicIcon = ({ size = 28, className = "" }) => (
       <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-        <line x1="12" x2="12" y1="19" y2="22" />
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>
       </svg>
     );
 
     const GoogleIcon = () => (
       <svg width="20" height="20" viewBox="0 0 24 24">
-        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
       </svg>
     );
 
@@ -57,59 +64,50 @@
       const [showLevelModal, setShowLevelModal] = useState(false);
       const [showModeModal, setShowModeModal] = useState(false);
       const [isReviewingVoice, setIsReviewingVoice] = useState(false);
+
+      // New features state
+      const [showRolePlay, setShowRolePlay] = useState(false);
+      const [activeRolePlay, setActiveRolePlay] = useState(null);
       const [showDashboard, setShowDashboard] = useState(false);
-      const [showVocabulary, setShowVocabulary] = useState(false);
-      const [showSessionSummary, setShowSessionSummary] = useState(false);
+      const [showHistory, setShowHistory] = useState(false);
+      const [showMistakes, setShowMistakes] = useState(false);
+      const [dailyGoal] = useState(10); // messages per day
+      const [todayMessages, setTodayMessages] = useState(0);
+      const [mistakes, setMistakes] = useState([]);
+      const [history, setHistory] = useState([]);
 
       const [currentStreak, setCurrentStreak] = useState(0);
       const [longestStreak, setLongestStreak] = useState(0);
-      const [totalMessages, setTotalMessages] = useState(0);
-      const [totalSessions, setTotalSessions] = useState(0);
-      const [vocabList, setVocabList] = useState([]);
-      const [newWord, setNewWord] = useState("");
-      const [sessionStartTime, setSessionStartTime] = useState(null);
-      const [sessionMessageCount, setSessionMessageCount] = useState(0);
-      const [sessionCorrections, setSessionCorrections] = useState(0);
-      const [lastPronunciationFeedback, setLastPronunciationFeedback] = useState("");
 
       const messagesEndRef = useRef(null);
       const recognitionRef = useRef(null);
-      const interimRef = useRef("");
-      const committedTranscriptRef = useRef("");
-      const sessionFinalRef = useRef("");
-      const isManualStopRef = useRef(false);
-      const isRestartingRef = useRef(false);
-      const permissionDeniedRef = useRef(false);
-      const lastConfidenceRef = useRef(0);
-
+      const finalTextRef = useRef("");
       const sessionRef = useRef(session);
       const levelRef = useRef(level);
       const modeRef = useRef(mode);
       const isTypingRef = useRef(isTyping);
+      const activeRolePlayRef = useRef(null);
 
       useEffect(() => { sessionRef.current = session; }, [session]);
       useEffect(() => { levelRef.current = level; }, [level]);
       useEffect(() => { modeRef.current = mode; }, [mode]);
       useEffect(() => { isTypingRef.current = isTyping; }, [isTyping]);
+      useEffect(() => { activeRolePlayRef.current = activeRolePlay; }, [activeRolePlay]);
 
       // Theme
       useEffect(() => {
         localStorage.setItem("fluento-theme", theme);
-        document.body.className = isDark ? "bg-black" : "bg-gray-100";
+        document.body.style.backgroundColor = isDark ? "#000" : "#f3f4f6";
       }, [theme, isDark]);
 
-      const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
+      const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
 
-      // Theme helper classes
+      // Theme classes
       const bg = isDark ? "bg-black" : "bg-gray-100";
-      const bgCard = isDark ? "bg-neutral-900" : "bg-white";
-      const bgInput = isDark ? "bg-neutral-900" : "bg-white";
-      const border = isDark ? "border-neutral-800" : "border-gray-200";
+      const card = isDark ? "bg-neutral-900 border-neutral-800" : "bg-white border-gray-200";
       const text = isDark ? "text-white" : "text-gray-900";
-      const textMuted = isDark ? "text-neutral-400" : "text-gray-500";
-      const textMuted2 = isDark ? "text-neutral-500" : "text-gray-400";
-      const hoverBg = isDark ? "hover:bg-neutral-800" : "hover:bg-gray-100";
-      const sidebarBorder = isDark ? "border-neutral-800" : "border-gray-200";
+      const muted = isDark ? "text-neutral-400" : "text-gray-500";
+      const inputBg = isDark ? "bg-neutral-900 border-neutral-700" : "bg-white border-gray-300";
 
       useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -117,16 +115,14 @@
           setLoading(false);
           if (session) {
             setShowLevelModal(true);
-            loadProgress(session);
-            loadVocabulary(session);
+            loadUserData(session);
           }
         });
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
           setSession(session);
           if (session) {
             setShowLevelModal(true);
-            loadProgress(session);
-            loadVocabulary(session);
+            loadUserData(session);
           }
         });
         return () => subscription.unsubscribe();
@@ -136,197 +132,80 @@
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, [messages, isTyping]);
 
-      const loadProgress = async (sess) => {
+      const loadUserData = async (sess) => {
         try {
           const { data } = await supabase.from("user_progress").select("*").eq("user_id", sess.user.id).maybeSingle();
           if (data) {
             setCurrentStreak(data.current_streak || 0);
             setLongestStreak(data.longest_streak || 0);
-            setTotalMessages(data.total_messages || 0);
-            setTotalSessions(data.total_sessions || 0);
-            if (data.level) { setLevel(data.level); levelRef.current = data.level; }
-          }
-        } catch (err) {}
-      };
-
-      const loadVocabulary = async (sess) => {
-        try {
-          const { data } = await supabase.from("vocabulary").select("*").eq("user_id", sess.user.id).order("created_at", { ascending: false });
-          setVocabList(data || []);
-        } catch (err) {}
-      };
-
-      const updateProgress = async () => {
-        if (!sessionRef.current) return;
-        const today = new Date().toISOString().split("T")[0];
-        try {
-          const { data: progress } = await supabase.from("user_progress").select("*").eq("user_id", sessionRef.current.user.id).maybeSingle();
-          let newStreak = 1, newLongest = longestStreak;
-          let newTotalMessages = (progress?.total_messages || 0) + 1;
-          let newTotalSessions = progress?.total_sessions || 0;
-
-          if (progress?.last_practice_date) {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split("T")[0];
-            if (progress.last_practice_date === today) newStreak = progress.current_streak || 1;
-            else if (progress.last_practice_date === yesterdayStr) {
-              newStreak = (progress.current_streak || 0) + 1;
-              newTotalSessions += 1;
-            } else {
-              newStreak = 1;
-              newTotalSessions += 1;
+            setTodayMessages(data.today_messages || 0);
+            if (data.level) {
+              setLevel(data.level);
+              levelRef.current = data.level;
             }
-          } else newTotalSessions = 1;
-
-          if (newStreak > (progress?.longest_streak || 0)) newLongest = newStreak;
-          else newLongest = progress?.longest_streak || newStreak;
-
-          await supabase.from("user_progress").upsert({
-            user_id: sessionRef.current.user.id,
-            current_streak: newStreak,
-            longest_streak: newLongest,
-            total_messages: newTotalMessages,
-            total_sessions: newTotalSessions,
-            last_practice_date: today,
-            level: levelRef.current,
-            updated_at: new Date().toISOString()
-          });
-          setCurrentStreak(newStreak);
-          setLongestStreak(newLongest);
-          setTotalMessages(newTotalMessages);
-          setTotalSessions(newTotalSessions);
-        } catch (err) {}
+          }
+          // Load mistakes
+          const { data: mistakeData } = await supabase.from("mistakes").select("*").eq("user_id", sess.user.id).order("count", { ascending: false }).limit(20);
+          setMistakes(mistakeData || []);
+        } catch (e) {}
       };
 
-      const addToVocabulary = async (word) => {
-        if (!sessionRef.current || !word.trim()) return;
-        const cleanWord = word.trim().toLowerCase();
-        if (vocabList.some(v => v.word.toLowerCase() === cleanWord)) return;
-        try {
-          const { data, error } = await supabase.from("vocabulary").insert({
-            user_id: sessionRef.current.user.id,
-            word: cleanWord,
-            meaning: "",
-            created_at: new Date().toISOString()
-          }).select().single();
-          if (!error && data) setVocabList(prev => [data, ...prev]);
-        } catch (err) {}
-      };
-
-      const removeFromVocabulary = async (id) => {
-        try {
-          await supabase.from("vocabulary").delete().eq("id", id);
-          setVocabList(prev => prev.filter(v => v.id !== id));
-        } catch (err) {}
-      };
-
-      const getPronunciationFeedback = (confidence) => {
-        if (confidence >= 0.85) return { text: "Excellent clarity!", emoji: "🌟" };
-        if (confidence >= 0.7) return { text: "Good pronunciation", emoji: "👍" };
-        if (confidence >= 0.5) return { text: "Clear enough, try speaking a bit slower", emoji: "🙂" };
-        return { text: "Try speaking more clearly and slowly", emoji: "🗣️" };
-      };
-
-      const stripPunctuation = (text) => text.replace(/[.,!?;:"“”‘’()\[\]{}…]/g, "").replace(/\s+/g, " ").trim();
-
+      // Speech Recognition
       useEffect(() => {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return;
-
-        const recognition = new SpeechRecognition();
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) return;
+        const recognition = new SR();
         recognition.continuous = false;
         recognition.interimResults = true;
         recognition.lang = "en-US";
-        let restartFailureCount = 0;
-
-        const updateDisplay = () => {
-          setInputText((committedTranscriptRef.current + " " + sessionFinalRef.current + " " + interimRef.current).replace(/\s+/g, " ").trim());
-        };
 
         recognition.onstart = () => {
           setIsListening(true);
-          setMicStatus("Listening… tap mic to stop & send");
-          isRestartingRef.current = false;
-          restartFailureCount = 0;
+          setMicStatus("Listening... Tap again to send");
+          finalTextRef.current = "";
         };
-
-        recognition.onresult = (event) => {
-          let interim = "", finalChunk = "", confidence = 0;
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-              finalChunk += event.results[i][0].transcript;
-              confidence = event.results[i][0].confidence || 0.75;
-            } else interim += event.results[i][0].transcript;
-          }
-          if (finalChunk) {
-            sessionFinalRef.current = stripPunctuation(finalChunk);
-            lastConfidenceRef.current = confidence;
-          }
-          interimRef.current = interim;
-          updateDisplay();
+        recognition.onresult = (e) => {
+          let t = "";
+          for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
+          setInputText(t.trim());
+          if (e.results[e.results.length - 1].isFinal) finalTextRef.current = t.trim();
         };
-
-        recognition.onerror = (event) => {
-          if (["not-allowed", "service-not-allowed", "audio-capture"].includes(event.error)) {
-            permissionDeniedRef.current = true;
-            setMicStatus(event.error === "audio-capture" ? "No microphone found" : "Microphone permission denied");
-          } else if (event.error === "no-speech") setMicStatus("Listening… tap mic to stop & send");
-          else if (event.error !== "aborted") setMicStatus("Error: " + event.error);
+        recognition.onerror = (e) => {
+          setIsListening(false);
+          if (e.error === "not-allowed") setMicStatus("Microphone permission denied");
+          else setMicStatus("Error: " + e.error);
         };
-
         recognition.onend = () => {
           setIsListening(false);
-          if (sessionFinalRef.current) {
-            committedTranscriptRef.current = stripPunctuation(committedTranscriptRef.current + " " + sessionFinalRef.current);
-            sessionFinalRef.current = "";
-          }
-          interimRef.current = "";
-
-          if (isManualStopRef.current) {
-            isManualStopRef.current = false;
-            const textToSend = committedTranscriptRef.current.trim();
-            if (textToSend) {
-              const feedback = getPronunciationFeedback(lastConfidenceRef.current);
-              setLastPronunciationFeedback(`${feedback.emoji} ${feedback.text}`);
-              setInputText(textToSend);
-              setIsReviewingVoice(true);
-              setMicStatus("");
-            } else setMicStatus("No speech detected. Tap mic to try again.");
-            return;
-          }
-
-          if (permissionDeniedRef.current) return;
-          if (!isRestartingRef.current) {
-            isRestartingRef.current = true;
-            setTimeout(() => {
-              try { recognitionRef.current.start(); }
-              catch (e) {
-                restartFailureCount++;
-                if (restartFailureCount <= 3) {
-                  setTimeout(() => {
-                    try { recognitionRef.current.start(); } catch (e2) { setMicStatus("Could not restart microphone"); }
-                  }, 300 * restartFailureCount);
-                } else setMicStatus("Could not restart microphone");
-              }
-              isRestartingRef.current = false;
-            }, 150);
-          }
+          const text = (finalTextRef.current || "").trim();
+          if (text) {
+            setMicStatus("Sending...");
+            setTimeout(() => sendMessage(text), 200);
+          } else setMicStatus("No speech detected");
         };
-
         recognitionRef.current = recognition;
       }, []);
+
+      const toggleListening = () => {
+        if (!recognitionRef.current) return setMicStatus("Speech not supported");
+        if (isListening) {
+          try { recognitionRef.current.stop(); } catch(e) {}
+        } else {
+          finalTextRef.current = "";
+          setInputText("");
+          try { recognitionRef.current.start(); } catch(e) { setMicStatus("Could not start mic"); }
+        }
+      };
 
       const speakText = (text) => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.95;
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = 0.95;
         const voices = window.speechSynthesis.getVoices();
-        let v = voices.find(v => v.name.toLowerCase().includes("daniel") && (v.name.toLowerCase().includes("steady") || v.name.toLowerCase().includes("broadcaster")));
-        if (!v) v = voices.find(v => v.name.toLowerCase().includes("daniel"));
-        if (v) utterance.voice = v;
-        window.speechSynthesis.speak(utterance);
+        let v = voices.find(v => v.name.toLowerCase().includes("daniel"));
+        if (v) u.voice = v;
+        window.speechSynthesis.speak(u);
       };
 
       useEffect(() => {
@@ -336,59 +215,13 @@
         }
       }, []);
 
-      const toggleListening = () => {
-        if (!recognitionRef.current) return setMicStatus("Speech recognition not available");
-        if (isListening) {
-          isManualStopRef.current = true;
-          try { recognitionRef.current.stop(); } catch (e) {}
-        } else {
-          committedTranscriptRef.current = "";
-          sessionFinalRef.current = "";
-          interimRef.current = "";
-          permissionDeniedRef.current = false;
-          setInputText("");
-          setIsReviewingVoice(false);
-          setLastPronunciationFeedback("");
-          isManualStopRef.current = false;
-          isRestartingRef.current = false;
-          setMicStatus("Listening…");
-          try { recognitionRef.current.start(); } catch (err) { setMicStatus("Could not start microphone"); }
-        }
-      };
-
-      const handleSendVoiceReview = () => {
-        const text = inputText.trim();
-        setIsReviewingVoice(false);
-        setLastPronunciationFeedback("");
-        if (text) sendMessage(text);
-      };
-
-      const handleDiscardVoiceReview = () => {
-        setIsReviewingVoice(false);
-        setInputText("");
-        setMicStatus("");
-        setLastPronunciationFeedback("");
-        committedTranscriptRef.current = "";
-      };
-
-      const handleRetryVoiceReview = () => {
-        setIsReviewingVoice(false);
-        setInputText("");
-        setMicStatus("");
-        setLastPronunciationFeedback("");
-        committedTranscriptRef.current = "";
-        setTimeout(() => toggleListening(), 0);
-      };
-
       const handleGoogleLogin = async () => {
-        setAuthError("");
         setAuthLoading(true);
         try {
-          const { error } = await supabase.auth.signInWithOAuth({
+          await supabase.auth.signInWithOAuth({
             provider: "google",
             options: { redirectTo: "https://samimmandal.github.io/Fluento-app/" }
           });
-          if (error) throw error;
         } catch (err) {
           setAuthError(err.message);
           setAuthLoading(false);
@@ -396,38 +229,23 @@
       };
 
       const handleLogout = async () => {
-        if (recognitionRef.current) {
-          isManualStopRef.current = false;
-          permissionDeniedRef.current = true;
-          try { recognitionRef.current.stop(); } catch (e) {}
-        }
         await supabase.auth.signOut();
         setSession(null);
         setMessages([]);
         setLevel(null);
         setMode(null);
-        setCurrentStreak(0);
-        setShowLevelModal(false);
-        setShowModeModal(false);
-        setShowDashboard(false);
-        setShowVocabulary(false);
-        setShowSessionSummary(false);
+        setActiveRolePlay(null);
       };
 
-      const handleSelectLevel = (l) => { setLevel(l); setShowLevelModal(false); setShowModeModal(true); };
-
-      const handleSelectMode = (m) => {
-        if (recognitionRef.current && isListening) {
-          isManualStopRef.current = false;
-          permissionDeniedRef.current = true;
-          try { recognitionRef.current.stop(); } catch (e) {}
-        }
-        setMode(m);
-        setShowModeModal(false);
-        setSessionStartTime(Date.now());
-        setSessionMessageCount(0);
-        setSessionCorrections(0);
-        setMessages([{ sender: "partner", text: `Hey there! You're in ${m} mode at ${level} level. What's on your mind today?`, correction: null }]);
+      const startRolePlay = (role) => {
+        setActiveRolePlay(role);
+        setShowRolePlay(false);
+        setMode("text");
+        setMessages([{
+          sender: "partner",
+          text: `Role Play started: ${role.title}. ${role.desc}. Let's begin!`,
+          correction: null
+        }]);
       };
 
       const parseCorrection = (raw) => {
@@ -438,40 +256,57 @@
         return { text: raw, correction: null };
       };
 
+      const saveMistake = async (original, corrected) => {
+        if (!sessionRef.current) return;
+        try {
+          // Simple: just insert
+          await supabase.from("mistakes").insert({
+            user_id: sessionRef.current.user.id,
+            original,
+            corrected,
+            count: 1,
+            created_at: new Date().toISOString()
+          });
+        } catch(e) {}
+      };
+
       const sendMessage = async (text) => {
         const trimmed = (text || "").trim();
-        if (!trimmed || isTypingRef.current || !levelRef.current || !sessionRef.current) return;
+        if (!trimmed || isTypingRef.current || !sessionRef.current) return;
 
         setInputText("");
         setMicStatus("");
-        committedTranscriptRef.current = "";
-        sessionFinalRef.current = "";
-        interimRef.current = "";
-
         setMessages(prev => [...prev, { sender: "user", text: trimmed, correction: null }]);
         setIsTyping(true);
         isTypingRef.current = true;
-        setSessionMessageCount(prev => prev + 1);
-        updateProgress();
+        setTodayMessages(prev => prev + 1);
 
         try {
+          const body = {
+            userId: sessionRef.current.user.id,
+            message: trimmed,
+            level: levelRef.current || "Beginner"
+          };
+          if (activeRolePlayRef.current) {
+            body.rolePlay = activeRolePlayRef.current.prompt;
+          }
+
           const res = await fetch(WORKER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: sessionRef.current.user.id, message: trimmed, level: levelRef.current })
+            body: JSON.stringify(body)
           });
           const data = await res.json();
           if (data.reply) {
             const parsed = parseCorrection(data.reply);
             setMessages(prev => [...prev, { sender: "partner", text: parsed.text, correction: parsed.correction }]);
             if (parsed.correction) {
-              setSessionCorrections(prev => prev + 1);
-              (parsed.correction.corrected || "").split(/\s+/).filter(w => w.length > 3).slice(0, 2).forEach(w => addToVocabulary(w.replace(/[^a-zA-Z]/g, "")));
+              saveMistake(parsed.correction.original, parsed.correction.corrected);
             }
             if (modeRef.current === "voice") speakText(parsed.text);
           }
-        } catch (err) {
-          setMessages(prev => [...prev, { sender: "partner", text: "Connection problem. Please try again.", correction: null }]);
+        } catch (e) {
+          setMessages(prev => [...prev, { sender: "partner", text: "Connection problem. Try again.", correction: null }]);
         }
         setIsTyping(false);
         isTypingRef.current = false;
@@ -479,15 +314,16 @@
 
       if (loading) return <div className={`h-screen ${bg} flex items-center justify-center ${text}`}>Loading...</div>;
 
+      // Login
       if (!session) {
         return (
           <div className={`min-h-screen ${bg} flex items-center justify-center p-4`}>
-            <div className={`${bgCard} border ${border} rounded-3xl p-8 w-full max-w-md text-center`}>
+            <div className={`${card} border rounded-3xl p-8 w-full max-w-md text-center`}>
               <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-5 text-white"><MicIcon /></div>
               <h1 className={`text-2xl font-semibold ${text} mb-1`}>Fluento</h1>
-              <p className={`${textMuted} text-sm mb-8`}>English Speaking Partner</p>
-              {authError && <div className="text-red-400 text-sm mb-4">{authError}</div>}
-              <button onClick={handleGoogleLogin} disabled={authLoading} className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3.5 rounded-xl border border-gray-200">
+              <p className={`${muted} text-sm mb-8`}>English Speaking Partner</p>
+              {authError && <div className="text-red-500 text-sm mb-4">{authError}</div>}
+              <button onClick={handleGoogleLogin} disabled={authLoading} className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3.5 rounded-xl border">
                 <GoogleIcon /> {authLoading ? "Redirecting..." : "Continue with Google"}
               </button>
             </div>
@@ -495,50 +331,48 @@
         );
       }
 
-      // Session Summary
-      if (showSessionSummary) {
-        const mins = sessionStartTime ? Math.max(1, Math.round((Date.now() - sessionStartTime) / 60000)) : 1;
+      // Role Play Selection
+      if (showRolePlay) {
         return (
-          <div className={`min-h-screen ${bg} ${text} p-4 flex items-center justify-center`}>
-            <div className={`max-w-md w-full ${bgCard} border ${border} rounded-3xl p-8 text-center`}>
-              <div className="text-4xl mb-4">🎉</div>
-              <h2 className="text-2xl font-bold mb-2">Session Complete!</h2>
-              <div className="grid grid-cols-2 gap-4 my-8">
-                <div className={`${isDark ? "bg-black/40" : "bg-gray-50"} rounded-2xl p-4`}><div className="text-2xl font-bold text-rose-500">{sessionMessageCount}</div><div className="text-xs text-gray-500">Messages</div></div>
-                <div className={`${isDark ? "bg-black/40" : "bg-gray-50"} rounded-2xl p-4`}><div className="text-2xl font-bold text-orange-500">{mins}m</div><div className="text-xs text-gray-500">Duration</div></div>
-                <div className={`${isDark ? "bg-black/40" : "bg-gray-50"} rounded-2xl p-4`}><div className="text-2xl font-bold text-emerald-500">{sessionCorrections}</div><div className="text-xs text-gray-500">Corrections</div></div>
-                <div className={`${isDark ? "bg-black/40" : "bg-gray-50"} rounded-2xl p-4`}><div className="text-2xl font-bold text-yellow-500">🔥 {currentStreak}</div><div className="text-xs text-gray-500">Streak</div></div>
+          <div className={`min-h-screen ${bg} ${text} p-4`}>
+            <div className="max-w-lg mx-auto">
+              <div className="flex items-center justify-between mb-6">
+                <button onClick={() => setShowRolePlay(false)} className={`${muted} text-sm`}>← Back</button>
+                <h1 className="text-xl font-semibold">Role Play Mode</h1>
+                <div className="w-10"></div>
               </div>
-              <button onClick={() => { setShowSessionSummary(false); setShowModeModal(true); }} className="w-full bg-rose-500 text-white py-3 rounded-2xl font-medium mb-3">Practice Again</button>
-              <button onClick={() => { setShowSessionSummary(false); setShowDashboard(true); }} className={`w-full ${isDark ? "bg-neutral-800" : "bg-gray-200"} py-3 rounded-2xl text-sm`}>View Progress</button>
+              <div className="space-y-3">
+                {ROLE_PLAYS.map(role => (
+                  <button key={role.id} onClick={() => startRolePlay(role)}
+                    className={`w-full text-left p-5 rounded-2xl border ${card} hover:border-rose-500 transition`}>
+                    <div className="font-semibold text-lg">{role.title}</div>
+                    <div className={`text-sm ${muted} mt-1`}>{role.desc}</div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         );
       }
 
-      // Vocabulary
-      if (showVocabulary) {
+      // Mistake Tracker
+      if (showMistakes) {
         return (
           <div className={`min-h-screen ${bg} ${text} p-4`}>
             <div className="max-w-lg mx-auto">
               <div className="flex items-center justify-between mb-6">
-                <button onClick={() => setShowVocabulary(false)} className={`${textMuted} text-sm`}>← Back</button>
-                <h1 className="text-xl font-semibold">Vocabulary</h1>
+                <button onClick={() => setShowMistakes(false)} className={`${muted} text-sm`}>← Back</button>
+                <h1 className="text-xl font-semibold">Mistake Tracker</h1>
                 <div className="w-10"></div>
               </div>
-              <div className="flex gap-2 mb-6">
-                <input value={newWord} onChange={e => setNewWord(e.target.value)} onKeyDown={e => e.key === "Enter" && newWord.trim() && (addToVocabulary(newWord), setNewWord(""))}
-                  placeholder="Add a word..." className={`flex-1 ${bgInput} border ${border} rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-rose-500 ${text}`} />
-                <button onClick={() => { addToVocabulary(newWord); setNewWord(""); }} className="bg-rose-500 text-white px-5 rounded-xl text-sm">Add</button>
-              </div>
-              {vocabList.length === 0 ? (
-                <div className={`text-center ${textMuted2} py-16`}div className="text-4xl mb-3">📚</div><p>No words yet</p></div>
+              {mistakes.length === 0 ? (
+                <div className={`text-center ${muted} py-16`}>No mistakes recorded yet. Keep practicing!</div>
               ) : (
                 <div className="space-y-3">
-                  {vocabList.map(item => (
-                    <div key={item.id} className={`${bgCard} border ${border} rounded-2xl p-4 flex justify-between items-center`}>
-                      <div className="font-medium capitalize">{item.word}</div>
-                      <button onClick={() => removeFromVocabulary(item.id)} className="text-gray-400 hover:text-red-500 text-sm">✕</button>
+                  {mistakes.map((m, i) => (
+                    <div key={i} className={`${card} border rounded-2xl p-4`}>
+                      <div className={`${muted} line-through text-sm`}>{m.original}</div>
+                      <div className="text-emerald-500 font-medium mt-1">→ {m.corrected}</div>
                     </div>
                   ))}
                 </div>
@@ -548,159 +382,187 @@
         );
       }
 
-      // Dashboard
-      if (showDashboard) {
+      // History (simple)
+      if (showHistory) {
         return (
           <div className={`min-h-screen ${bg} ${text} p-4`}>
             <div className="max-w-lg mx-auto">
-              <div className="flex items-center justify-between mb-8">
-                <button onClick={() => setShowDashboard(false)} className={`${textMuted} text-sm`}>← Back</button>
-                <h1 className="text-xl font-semibold">Progress</h1>
+              <div className="flex items-center justify-between mb-6">
+                <button onClick={() => setShowHistory(false)} className={`${muted} text-sm`}>← Back</button>
+                <h1 className="text-xl font-semibold">Conversation History</h1>
                 <div className="w-10"></div>
               </div>
-              <div className="bg-gradient-to-br from-orange-500/20 to-rose-500/10 border border-orange-500/30 rounded-3xl p-6 mb-6 text-center">
-                <div className="text-5xl mb-2">🔥</div>
-                <div className="text-4xl font-bold mb-1">{currentStreak}</div>
-                <div className="text-orange-500 font-medium">Day Streak</div>
-                <div className={`text-sm ${textMuted} mt-2`}>Best: {longestStreak} days</div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className={`${bgCard} border ${border} rounded-2xl p-5 text-center`}div className="text-2xl font-bold">{totalMessages}</div><div className={`text-xs ${textMuted}`}>Messages</div></div>
-                <div className={`${bgCard} border ${border} rounded-2xl p-5 text-center`}div className="text-2xl font-bold">{totalSessions}</div><div className={`text-xs ${textMuted}`}>Practice Days</div></div>
-                <div className={`${bgCard} border ${border} rounded-2xl p-5 text-center`}div className="text-2xl font-bold text-rose-500">{level || "-"}</div><div className={`text-xs ${textMuted}`}>Level</div></div>
-                <div className={`${bgCard} border ${border} rounded-2xl p-5 text-center`}div className="text-2xl font-bold text-emerald-500">{vocabList.length}</div><div className={`text-xs ${textMuted}`}>Words</div></div>
+              <div className={`text-center ${muted} py-16`}>
+                <p>Your recent conversations will appear here.</p>
+                <p className="text-sm mt-2">(Full history coming in next update)</p>
               </div>
             </div>
           </div>
         );
       }
 
+      // Dashboard
+      if (showDashboard) {
+        const goalPercent = Math.min(100, Math.round((todayMessages / dailyGoal) * 100));
+        return (
+          <div className={`min-h-screen ${bg} ${text} p-4`}>
+            <div className="max-w-lg mx-auto">
+              <div className="flex items-center justify-between mb-6">
+                <button onClick={() => setShowDashboard(false)} className={`${muted} text-sm`}>← Back</button>
+                <h1 className="text-xl font-semibold">Dashboard</h1>
+                <div className="w-10"></div>
+              </div>
+
+              {/* Daily Goal */}
+              <div className={`${card} border rounded-2xl p-5 mb-4`}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-medium">Daily Goal</span>
+                  <span className="text-sm text-rose-500">{todayMessages}/{dailyGoal} messages</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-3">
+                  <div className="bg-rose-500 h-3 rounded-full transition-all" style={{ width: goalPercent + "%" }}></div>
+                </div>
+                <div className={`text-xs ${muted} mt-2`}>{goalPercent}% completed today</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className={`${card} border rounded-2xl p-5 text-center`}>
+                  <div className="text-2xl font-bold">🔥 {currentStreak}</div>
+                  <div className={`text-xs ${muted}`}>Day Streak</div>
+                </div>
+                <div className={`${card} border rounded-2xl p-5 text-center`}>
+                  <div className="text-2xl font-bold">{longestStreak}</div>
+                  <div className={`text-xs ${muted}`}>Best Streak</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Level
       if (showLevelModal) {
         return (
           <div className={`min-h-screen ${bg} flex items-center justify-center p-4`}>
-            <div className={`${bgCard} border ${border} rounded-3xl max-w-md w-full p-8 text-center`}>
+            <div className={`${card} border rounded-3xl max-w-md w-full p-8 text-center`}>
               <h2 className={`text-2xl font-semibold mb-6 ${text}`}>Choose Your Level</h2>
               {["Beginner", "Intermediate", "Advanced"].map(l => (
-                <button key={l} onClick={() => handleSelectLevel(l)} className={`w-full py-4 mb-3 ${isDark ? "bg-neutral-900 hover:bg-neutral-800 border-neutral-800" : "bg-gray-50 hover:bg-gray-100 border-gray-200"} border rounded-2xl ${text} text-left px-5`}>{l}</button>
+                <button key={l} onClick={() => { setLevel(l); setShowLevelModal(false); setShowModeModal(true); }}
+                  className={`w-full py-4 mb-3 rounded-2xl border ${card} ${text} text-left px-5`}>{l}</button>
               ))}
             </div>
           </div>
         );
       }
 
+      // Mode
       if (showModeModal) {
         return (
           <div className={`min-h-screen ${bg} flex items-center justify-center p-4`}>
-            <div className={`${bgCard} border ${border} rounded-3xl max-w-md w-full p-8 text-center`}>
-              <h2 className={`text-2xl font-semibold mb-6 ${text}`}>Choose Mode</h2>
-              <button onClick={() => handleSelectMode("voice")} className={`w-full py-5 mb-3 ${isDark ? "bg-neutral-900 border-neutral-800" : "bg-gray-50 border-gray-200"} border rounded-2xl ${text} text-left px-5`}>
+            <div className={`${card} border rounded-3xl max-w-md w-full p-8 text-center`}>
+              <h2 className={`text-2xl font-semibold mb-6 ${text}`}>How do you want to practice?</h2>
+              <button onClick={() => { setMode("voice"); setShowModeModal(false); setMessages([{sender:"partner", text:`Voice mode started at ${level} level. Speak something!`, correction:null}]); }}
+                className={`w-full py-5 mb-3 rounded-2xl border ${card} ${text} text-left px-5`}>
                 <div className="font-medium text-lg">Speak with AI</div>
-                <div className={`text-sm ${textMuted}`}>Tap mic • AI replies with voice</div>
+                <div className={`text-sm ${muted}`}>Use microphone</div>
               </button>
-              <button onClick={() => handleSelectMode("text")} className={`w-full py-5 ${isDark ? "bg-neutral-900 border-neutral-800" : "bg-gray-50 border-gray-200"} border rounded-2xl ${text} text-left px-5`}>
-                <div className="font-medium text-lg">Chat with Samim</div>
-                <div className={`text-sm ${textMuted}`}>Type messages</div>
+              <button onClick={() => { setMode("text"); setShowModeModal(false); setMessages([{sender:"partner", text:`Text mode started at ${level} level. Type something!`, correction:null}]); }}
+                className={`w-full py-5 mb-3 rounded-2xl border ${card} ${text} text-left px-5`}>
+                <div className="font-medium text-lg">Chat with AI</div>
+                <div className={`text-sm ${muted}`}>Type messages</div>
+              </button>
+              <button onClick={() => { setShowModeModal(false); setShowRolePlay(true); }}
+                className={`w-full py-5 rounded-2xl border ${card} ${text} text-left px-5`}>
+                <div className="font-medium text-lg">Role Play Mode</div>
+                <div className={`text-sm ${muted}`}>Interview, Travel, Shopping...</div>
               </button>
             </div>
           </div>
         );
       }
 
-      // Main App
+      // Main Chat
       return (
         <div className={`flex h-screen ${bg} ${text} overflow-hidden`}>
           {/* Sidebar */}
-          <div className={`w-64 border-r ${sidebarBorder} hidden md:flex flex-col justify-between p-6`}>
+          <div className={`w-64 border-r ${isDark ? "border-neutral-800" : "border-gray-200"} hidden md:flex flex-col justify-between p-6`}>
             <div>
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 flex items-center justify-center text-white"><MicIcon size={20} /></div>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-400 flex items-center justify-center text-white"><MicIcon size={20}/></div>
                 <span className="font-semibold">Fluento</span>
               </div>
-              <div className={`text-xs ${textMuted2} mb-1`}>Logged in as</div>
-              <div className={`text-sm truncate mb-6 ${textMuted}`}>{session.user.email}</div>
+              <div className={`text-xs ${muted} mb-1`}>Logged in as</div>
+              <div className={`text-sm truncate mb-4 ${muted}`}>{session.user.email}</div>
 
-              <div className="bg-gradient-to-br from-orange-500/20 to-rose-500/10 border border-orange-500/30 rounded-2xl p-4 mb-4">
-                <div className="text-xs text-orange-500 mb-1">Daily Streak</div>
-                <div className="text-2xl font-bold">🔥 {currentStreak}</div>
+              <div className="bg-gradient-to-br from-orange-500/20 to-rose-500/10 border border-orange-500/30 rounded-2xl p-4 mb-3">
+                <div className="text-xs text-orange-500">Daily Streak</div>
+                <div className="text-xl font-bold">🔥 {currentStreak}</div>
+              </div>
+
+              {/* Daily Goal Mini */}
+              <div className={`${card} border rounded-2xl p-3 mb-3`}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span>Daily Goal</span>
+                  <span className="text-rose-500">{todayMessages}/{dailyGoal}</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div className="bg-rose-500 h-2 rounded-full" style={{width: Math.min(100, (todayMessages/dailyGoal)*100) + "%"}}></div>
+                </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <button onClick={() => setShowDashboard(true)} className={`w-full text-sm ${isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300"} py-2.5 rounded-xl`}>📊 Progress</button>
-              <button onClick={() => setShowVocabulary(true)} className={`w-full text-sm ${isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300"} py-2.5 rounded-xl`}>📚 Vocabulary</button>
-              <button onClick={() => setShowSessionSummary(true)} className={`w-full text-sm ${isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300"} py-2.5 rounded-xl`}>📋 End Session</button>
-              <button onClick={() => setShowModeModal(true)} className={`w-full text-sm ${isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300"} py-2 rounded-xl`}>Change Mode</button>
-              
-              {/* Theme Toggle */}
-              <button onClick={toggleTheme} className={`w-full text-sm ${isDark ? "bg-neutral-800 hover:bg-neutral-700" : "bg-gray-200 hover:bg-gray-300"} py-2.5 rounded-xl flex items-center justify-center gap-2`}>
+              <button onClick={() => setShowDashboard(true)} className={`w-full text-sm py-2.5 rounded-xl ${isDark ? "bg-neutral-800" : "bg-gray-200"}`}>📊 Dashboard</button>
+              <button onClick={() => setShowRolePlay(true)} className={`w-full text-sm py-2.5 rounded-xl ${isDark ? "bg-neutral-800" : "bg-gray-200"}`}>🎭 Role Play</button>
+              <button onClick={() => setShowMistakes(true)} className={`w-full text-sm py-2.5 rounded-xl ${isDark ? "bg-neutral-800" : "bg-gray-200"}`}>📝 Mistakes</button>
+              <button onClick={() => setShowHistory(true)} className={`w-full text-sm py-2.5 rounded-xl ${isDark ? "bg-neutral-800" : "bg-gray-200"}`}>💬 History</button>
+              <button onClick={toggleTheme} className={`w-full text-sm py-2.5 rounded-xl ${isDark ? "bg-neutral-800" : "bg-gray-200"}`}>
                 {isDark ? "☀️ Light Mode" : "🌙 Dark Mode"}
               </button>
-
               <button onClick={handleLogout} className="w-full text-sm text-red-500 py-2 rounded-xl">Logout</button>
             </div>
           </div>
 
-          {/* Chat Area */}
+          {/* Chat */}
           <div className="flex-1 flex flex-col relative">
-            <div className={`h-16 border-b ${border} flex items-center justify-between px-6`}>
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></div>
-                <span className="text-sm">Live Practice</span>
+            <div className={`h-14 border-b ${isDark ? "border-neutral-800" : "border-gray-200"} flex items-center justify-between px-4`}>
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></div>
+                <span className="text-sm">{activeRolePlay ? activeRolePlay.title : "Practice"}</span>
               </div>
-              <div className="flex items-center gap-3">
-                {currentStreak > 0 && <span className="text-xs bg-orange-500/20 text-orange-500 px-2.5 py-1 rounded-full">🔥 {currentStreak}</span>}
-                <span className={`text-xs px-3 py-1 rounded-full ${bgCard} border ${border}`}>{level} · {mode}</span>
+              <div className="flex items-center gap-2">
+                {currentStreak > 0 && <span className="text-xs bg-orange-500/20 text-orange-500 px-2 py-0.5 rounded-full">🔥 {currentStreak}</span>}
+                <span className={`text-xs px-2 py-0.5 rounded-full ${card} border`}>{level} · {mode}</span>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto pt-6 pb-40 px-4 md:px-8 space-y-6 max-w-3xl mx-auto w-full">
-              {messages.map((msg, idx) => (
-                <div key={idx} className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}>
-                  <div className={`max-w-xl rounded-2xl px-4 py-3 text-sm \( {msg.sender === "user" ? "bg-rose-500 text-white rounded-br-sm" : ` \){bgCard} border ${border} rounded-bl-sm`}`}>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-3xl mx-auto w-full pb-32">
+              {messages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm \( {msg.sender === "user" ? "bg-rose-500 text-white" : ` \){card} border`}`}>
                     {msg.text}
                   </div>
-                  {msg.correction && (
-                    <div className={`mt-3 max-w-xl w-full ${bgCard} border border-rose-300/40 rounded-2xl p-4 text-sm`}>
-                      <div className="font-semibold text-rose-500 mb-2">🔧 Gentle Correction</div>
-                      <div className={`${textMuted} line-through mb-1`}>"{msg.correction.original}"</div>
-                      <div className="text-emerald-500 font-medium mb-2">→ "{msg.correction.corrected}"</div>
-                      {msg.correction.tip && <div className={`text-xs ${isDark ? "bg-black/40" : "bg-gray-50"} p-2.5 rounded-xl`}>💡 {msg.correction.tip}</div>}
-                    </div>
-                  )}
                 </div>
               ))}
-              {isTyping && <div className={`${textMuted} text-sm`}>Partner is speaking...</div>}
+              {isTyping && <div className={`${muted} text-sm`}>Partner is typing...</div>}
               <div ref={messagesEndRef} />
             </div>
 
-            <div className={`absolute bottom-0 left-0 right-0 p-4 ${bg} border-t ${border}`}>
+            <div className={`absolute bottom-0 left-0 right-0 p-4 ${bg} border-t ${isDark ? "border-neutral-800" : "border-gray-200"}`}>
               <div className="max-w-3xl mx-auto">
                 {mode === "voice" ? (
-                  isReviewingVoice ? (
-                    <div className="flex flex-col gap-3">
-                      {lastPronunciationFeedback && <div className="text-center text-sm text-emerald-500 py-2">{lastPronunciationFeedback}</div>}
-                      <textarea value={inputText} onChange={e => setInputText(e.target.value)} rows={2} autoFocus
-                        className={`w-full ${bgInput} border ${border} rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-rose-500 resize-none ${text}`} />
-                      <div className="flex gap-2">
-                        <button onClick={handleDiscardVoiceReview} className={`flex-1 py-3 rounded-2xl ${isDark ? "bg-neutral-800" : "bg-gray-200"} text-sm`}>Discard</button>
-                        <button onClick={handleRetryVoiceReview} className={`flex-1 py-3 rounded-2xl ${isDark ? "bg-neutral-800" : "bg-gray-200"} text-sm flex items-center justify-center gap-1`}><MicIcon size={16} /> Re-record</button>
-                        <button onClick={handleSendVoiceReview} disabled={!inputText.trim()} className="flex-1 py-3 rounded-2xl bg-rose-500 text-white text-sm font-medium disabled:opacity-40">Send</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3">
-                      {inputText && <div className={`w-full ${bgCard} border ${border} rounded-xl px-4 py-2.5 text-sm text-center`}>{inputText}</div>}
-                      <button onClick={toggleListening} className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${isListening ? "bg-rose-500 scale-110 shadow-lg shadow-rose-500/50 text-white" : isDark ? "bg-neutral-800 text-neutral-300" : "bg-gray-200 text-gray-600"}`}>
-                        <MicIcon size={32} />
-                      </button>
-                      <p className={`text-xs ${textMuted}`}>{micStatus || "Tap the mic to speak"}</p>
-                    </div>
-                  )
+                  <div className="flex flex-col items-center gap-2">
+                    {inputText && <div className={`w-full ${card} border rounded-xl px-4 py-2 text-sm text-center`}>{inputText}</div>}
+                    <button onClick={toggleListening} className={`w-16 h-16 rounded-full flex items-center justify-center ${isListening ? "bg-rose-500 text-white scale-110" : isDark ? "bg-neutral-800" : "bg-gray-200"}`}>
+                      <MicIcon size={28} />
+                    </button>
+                    <p className={`text-xs ${muted}`}>{micStatus || "Tap mic to speak"}</p>
+                  </div>
                 ) : (
-                  <form onSubmit={e => { e.preventDefault(); sendMessage(inputText); }} className="flex gap-3">
-                    <input value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage(inputText))}
-                      placeholder="Type your message..." className={`flex-1 ${bgInput} border ${border} rounded-2xl px-5 py-3 focus:outline-none focus:border-rose-500 ${text}`} />
-                    <button type="submit" className="bg-rose-500 hover:bg-rose-600 text-white px-6 py-3 rounded-2xl font-medium">Send</button>
+                  <form onSubmit={e => { e.preventDefault(); sendMessage(inputText); }} className="flex gap-2">
+                    <input value={inputText} onChange={e => setInputText(e.target.value)}
+                      placeholder="Type your message..." className={`flex-1 ${inputBg} border rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-rose-500 ${text}`} />
+                    <button type="submit" className="bg-rose-500 text-white px-5 py-3 rounded-2xl text-sm font-medium">Send</button>
                   </form>
                 )}
               </div>
